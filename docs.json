@@ -18,8 +18,7 @@
             "pages": [
               "index",
               "quickstart",
-              "development",
-              "playground-livekit"
+              "development"
             ]
           },
           {
