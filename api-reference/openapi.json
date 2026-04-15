@@ -307,9 +307,9 @@
           "text": { "type": "string" },
           "provider": { "type": "string", "description": "Provider that actually ran (post-failover)." },
           "model": { "type": "string" },
-          "confidence": { "type": "number", "nullable": true, "minimum": 0, "maximum": 1 },
+          "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
           "failoverCount": { "type": "integer", "minimum": 0 },
-          "scoresRunId": { "type": "string", "nullable": true }
+          "scoresRunId": { "type": ["string", "null"] }
         }
       },
       "SynthesizeRequest": {
@@ -358,7 +358,7 @@
             }
           },
           "failoverCount": { "type": "integer", "minimum": 0 },
-          "scoresRunId": { "type": "string", "nullable": true }
+          "scoresRunId": { "type": ["string", "null"] }
         }
       },
       "Error": {
