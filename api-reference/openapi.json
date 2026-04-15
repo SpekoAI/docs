@@ -74,8 +74,8 @@
             "in": "header",
             "name": "Content-Type",
             "required": false,
-            "schema": { "type": "string", "examples": ["audio/wav", "audio/mpeg", "audio/pcm;rate=16000"] },
-            "description": "Audio MIME type. Recommended for the upstream provider to interpret the body."
+            "schema": { "type": "string" },
+            "description": "Audio MIME type, e.g. `audio/wav`, `audio/mpeg`, `audio/pcm;rate=16000`."
           }
         ],
         "requestBody": {
@@ -96,7 +96,12 @@
         "responses": {
           "200": {
             "description": "Transcript",
-            "headers": { "$ref": "#/components/headers/RoutingHeaders" },
+            "headers": {
+              "X-Speko-Provider": { "schema": { "type": "string" }, "description": "Provider that actually handled the request." },
+              "X-Speko-Model": { "schema": { "type": "string" }, "description": "Specific model used." },
+              "X-Speko-Failover-Count": { "schema": { "type": "integer" }, "description": "Number of providers tried before success." },
+              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" }, "description": "Benchmark snapshot id used for routing." }
+            },
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/TranscribeResponse" }
@@ -127,18 +132,12 @@
           "200": {
             "description": "Audio bytes",
             "headers": {
-              "Content-Type": {
-                "schema": { "type": "string" },
-                "description": "Audio MIME type, e.g. `audio/pcm;rate=24000` or `audio/mpeg`."
-              },
-              "X-Speko-Audio-Format": {
-                "schema": { "type": "string" },
-                "description": "Mirrors `Content-Type` for client-side dispatch."
-              },
-              "X-Speko-Provider": { "schema": { "type": "string" } },
-              "X-Speko-Model": { "schema": { "type": "string" } },
-              "X-Speko-Failover-Count": { "schema": { "type": "integer" } },
-              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" } }
+              "Content-Type": { "schema": { "type": "string" }, "description": "Audio MIME type, e.g. `audio/pcm;rate=24000` or `audio/mpeg`." },
+              "X-Speko-Audio-Format": { "schema": { "type": "string" }, "description": "Mirrors `Content-Type` for client-side dispatch." },
+              "X-Speko-Provider": { "schema": { "type": "string" }, "description": "Provider that actually handled the request." },
+              "X-Speko-Model": { "schema": { "type": "string" }, "description": "Specific model used." },
+              "X-Speko-Failover-Count": { "schema": { "type": "integer" }, "description": "Number of providers tried before success." },
+              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" }, "description": "Benchmark snapshot id used for routing." }
             },
             "content": {
               "application/octet-stream": {
@@ -169,7 +168,12 @@
         "responses": {
           "200": {
             "description": "Completion",
-            "headers": { "$ref": "#/components/headers/RoutingHeaders" },
+            "headers": {
+              "X-Speko-Provider": { "schema": { "type": "string" }, "description": "Provider that actually handled the request." },
+              "X-Speko-Model": { "schema": { "type": "string" }, "description": "Specific model used." },
+              "X-Speko-Failover-Count": { "schema": { "type": "integer" }, "description": "Number of providers tried before success." },
+              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" }, "description": "Benchmark snapshot id used for routing." }
+            },
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/CompleteResponse" }
@@ -200,12 +204,12 @@
             "type": "string",
             "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
             "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
-            "example": "en-US"
+            "examples": ["en-US"]
           },
           "vertical": {
             "type": "string",
             "enum": ["general", "healthcare", "finance", "legal"],
-            "example": "general"
+            "examples": ["general"]
           },
           "optimizeFor": {
             "type": "string",
@@ -291,7 +295,7 @@
           "sessionId": { "type": "string", "format": "uuid" },
           "conversationToken": { "type": "string", "description": "LiveKit JWT for the browser to join the room." },
           "livekitUrl": { "type": "string", "format": "uri" },
-          "roomName": { "type": "string", "example": "speko_..." },
+          "roomName": { "type": "string", "examples": ["speko_..."] },
           "identity": { "type": "string" },
           "expiresAt": { "type": "string", "format": "date-time" }
         }
@@ -366,33 +370,15 @@
         }
       }
     },
-    "headers": {
-      "RoutingHeaders": {
-        "X-Speko-Provider": {
-          "schema": { "type": "string" },
-          "description": "Provider that actually handled the request."
-        },
-        "X-Speko-Model": {
-          "schema": { "type": "string" },
-          "description": "Specific model used."
-        },
-        "X-Speko-Failover-Count": {
-          "schema": { "type": "integer" },
-          "description": "Number of providers tried before success."
-        },
-        "X-Speko-Scores-Run-Id": {
-          "schema": { "type": "string" },
-          "description": "Benchmark snapshot id used for routing."
-        }
-      }
-    },
     "responses": {
       "Unauthorized": {
         "description": "Missing or invalid bearer token.",
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "Unauthorized", "code": "UNAUTHORIZED" }
+            "examples": {
+              "default": { "value": { "error": "Unauthorized", "code": "UNAUTHORIZED" } }
+            }
           }
         }
       },
@@ -401,7 +387,9 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "Invalid request body", "code": "VALIDATION_ERROR" }
+            "examples": {
+              "default": { "value": { "error": "Invalid request body", "code": "VALIDATION_ERROR" } }
+            }
           }
         }
       },
@@ -410,7 +398,9 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "Audio body is empty.", "code": "INVALID_AUDIO" }
+            "examples": {
+              "default": { "value": { "error": "Audio body is empty.", "code": "INVALID_AUDIO" } }
+            }
           }
         }
       },
@@ -419,7 +409,9 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "All providers failed", "code": "TRANSCRIBE_FAILED" }
+            "examples": {
+              "default": { "value": { "error": "All providers failed", "code": "TRANSCRIBE_FAILED" } }
+            }
           }
         }
       },
@@ -428,7 +420,9 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "All providers failed", "code": "SYNTHESIZE_FAILED" }
+            "examples": {
+              "default": { "value": { "error": "All providers failed", "code": "SYNTHESIZE_FAILED" } }
+            }
           }
         }
       },
@@ -437,7 +431,9 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "All providers failed", "code": "COMPLETE_FAILED" }
+            "examples": {
+              "default": { "value": { "error": "All providers failed", "code": "COMPLETE_FAILED" } }
+            }
           }
         }
       },
@@ -446,7 +442,9 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": "Failed to dispatch voice agent", "code": "SESSION_CREATE_FAILED" }
+            "examples": {
+              "default": { "value": { "error": "Failed to dispatch voice agent", "code": "SESSION_CREATE_FAILED" } }
+            }
           }
         }
       }
