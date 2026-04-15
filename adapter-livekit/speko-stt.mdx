@@ -1,0 +1,73 @@
+---
+title: 'SpekoSTT'
+description: 'LiveKit Agents STT adapter backed by POST /v1/transcribe.'
+---
+
+`SpekoSTT` is a `stt.STT` implementation. It encodes each utterance's audio frames into a WAV payload and uploads it to the Speko proxy. The router picks the best STT provider for your `(language, vertical, optimizeFor)` and handles failover.
+
+```ts
+import { SpekoSTT } from '@spekoai/adapter-livekit';
+import { stt as sttNs } from '@livekit/agents';
+
+const spekoSTT = new SpekoSTT({
+  speko,
+  intent: { language: 'en-US', vertical: 'general' },
+});
+
+const wrapped = new sttNs.StreamAdapter(spekoSTT, vad);
+```
+
+## Constructor
+
+```ts
+new SpekoSTT(options: SpekoSTTOptions)
+```
+
+### `SpekoSTTOptions`
+
+| Field         | Type                                  | Required | Description                                     |
+| ------------- | ------------------------------------- | -------- | ----------------------------------------------- |
+| `speko`       | `Speko`                               | ✅       | `@spekoai/sdk` client.                          |
+| `intent`      | [`Intent`](/adapter-livekit/intent)   | ✅       | Validated at construction time.                 |
+| `constraints` | `PipelineConstraints?`                |          | Allow-list constraints passed on every call.    |
+
+The constructor calls `validateIntent(intent)` — a broken routing hint throws here rather than deep inside the first transcription.
+
+## Properties
+
+- `label = 'speko.STT'`
+- `provider = 'speko'`
+- `model = 'speko-router'`
+- `streaming = false`, `interimResults = false`
+
+## Streaming requirement
+
+`SpekoSTT.stream()` throws. The Speko proxy is buffered, so native streaming isn't possible. Wrap the instance:
+
+```ts
+import { stt } from '@livekit/agents';
+
+const adapter = new stt.StreamAdapter(spekoSTT, vad);
+```
+
+Or use [`createSpekoComponents`](/adapter-livekit/create-speko-components) which does this for you.
+
+## Per-utterance flow
+
+1. `StreamAdapter` + VAD segment the user's audio into utterances.
+2. `SpekoSTT._recognize(frame, abortSignal)` is invoked for each utterance.
+3. Frames are combined (`combineAudioFrames`) and encoded into PCM16 mono WAV via [`framesToWav`](/adapter-livekit/audio#framestowav).
+4. The WAV is uploaded via `speko.transcribe()` with the intent header and any `constraints`.
+5. The result is emitted as a single `FINAL_TRANSCRIPT` event with confidence defaulting to `1` when the upstream provider doesn't report one.
+
+Aborts propagate: when the session tears down, the `AbortSignal` passed by `StreamAdapter` cancels the in-flight HTTP request.
+
+## Mono-only
+
+Multi-channel audio throws at the WAV-encode step:
+
+```
+SpekoSTT: expected mono audio (1 channel), got 2. …
+```
+
+Configure your LiveKit `AgentSession` to pass mono audio, or pre-mix upstream.

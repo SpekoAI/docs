@@ -1,0 +1,48 @@
+---
+title: 'Speko client'
+description: 'Construct the SDK client and configure transport options.'
+---
+
+The `Speko` class is the single entry point. Construct it once per process and reuse it — HTTP keep-alive, auth headers, and timeout state are all bound to the instance.
+
+```ts
+import { Speko } from '@spekoai/sdk';
+
+const speko = new Speko({
+  apiKey: process.env.SPEKO_API_KEY!,
+  baseUrl: 'https://api.speko.ai', // optional
+  timeout: 30_000,                  // optional, ms
+});
+```
+
+## `new Speko(options)`
+
+### `SpekoClientOptions`
+
+| Field      | Type      | Default                   | Description                                                                                                 |
+| ---------- | --------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `apiKey`   | `string`  | — (required)              | API key. Get one at [dashboard.speko.ai/api-keys](https://dashboard.speko.ai/api-keys). Throws if missing.  |
+| `baseUrl`  | `string?` | `https://api.speko.ai`    | Override the proxy base URL — useful for staging, self-hosted deploys, or local development.                |
+| `timeout`  | `number?` | `30000`                   | Per-request timeout in milliseconds. Applied via an internal `AbortController` composed with external ones. |
+
+A trailing slash on `baseUrl` is stripped automatically.
+
+### Instance properties
+
+- `speko.usage` — a [`Usage`](/sdk/usage) resource for billing queries.
+
+### Instance methods
+
+- `speko.transcribe(audio, options, abortSignal?)` — see [transcribe](/sdk/transcribe).
+- `speko.synthesize(text, options, abortSignal?)` — see [synthesize](/sdk/synthesize).
+- `speko.complete(params, abortSignal?)` — see [complete](/sdk/complete).
+
+All three accept a trailing `AbortSignal` and compose it with the client's timeout.
+
+## Authentication
+
+Requests send `Authorization: Bearer <apiKey>`. The SDK sets a `User-Agent` of `@spekoai/sdk/<version>` on every request. Non-2xx responses are parsed as `{ error, code }` JSON when possible and re-thrown as [`SpekoApiError`](/sdk/errors) (or its `SpekoAuthError` / `SpekoRateLimitError` subclass).
+
+## Concurrency
+
+The client is safe to share across concurrent requests — it holds no per-call mutable state. The internal `fetch` calls are fully independent; each builds its own `AbortController`.

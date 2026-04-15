@@ -1,0 +1,79 @@
+---
+title: '@spekoai/client'
+description: 'Browser SDK for real-time voice conversations over LiveKit WebRTC.'
+---
+
+`@spekoai/client` is the browser-side companion to `@spekoai/sdk`. It connects a browser tab to a Speko voice session over LiveKit WebRTC: capture the user's microphone, subscribe to the agent's audio track, and exchange structured events (transcripts, contextual updates, overrides) over LiveKit's data channel.
+
+Your server (using `@spekoai/sdk` or the raw HTTP API) mints a session token. The browser takes that token and joins the room. Audio flows browser ↔ LiveKit ↔ agent worker — your server is not in the audio path.
+
+## Install
+
+```bash
+npm install @spekoai/client
+# or
+bun add @spekoai/client
+```
+
+Peer dependency: `livekit-client`. The package re-exports no LiveKit types on its public surface, so you only need `livekit-client` transitively.
+
+## Quick start
+
+### 1. Server mints a session
+
+```ts
+// server side — using @spekoai/sdk or raw fetch
+const session = await fetch('/v1/sessions', { ... });
+// returns { conversationToken, livekitUrl, roomName, identity, expiresAt }
+```
+
+See the server-side [playground guide](/playground-livekit) for an end-to-end walk-through of how sessions are created and agents are dispatched.
+
+### 2. Browser joins the room
+
+```ts
+import { VoiceConversation } from '@spekoai/client';
+
+const conversation = await VoiceConversation.create({
+  conversationToken,   // from server
+  livekitUrl,          // from server
+
+  onConnect: ({ conversationId }) => console.log('connected', conversationId),
+  onDisconnect: ({ reason }) => console.log('disconnected', reason),
+  onMessage: ({ source, text, isFinal }) =>
+    console.log(source, text, isFinal),
+  onStatusChange: (status) => console.log('status', status),
+  onModeChange: (mode) => console.log('mode', mode),
+  onError: (err) => console.error(err),
+});
+
+await conversation.setMicMuted(true);
+conversation.setVolume(0.8);
+conversation.sendUserMessage('hello');
+conversation.sendContextualUpdate('user switched to the checkout page');
+
+await conversation.endSession();
+```
+
+## What the SDK owns
+
+- Connecting to LiveKit with the supplied token.
+- Acquiring the microphone with sensible constraints (echo cancellation, noise suppression, auto gain — all togglable via `audioConstraints`).
+- Subscribing to remote audio tracks and attaching them to hidden `<audio>` elements.
+- Parsing inbound data-channel packets (transcripts, agent messages) and invoking your callbacks.
+- Sending outbound packets — overrides, user messages, contextual updates.
+- Mic mute, speaker volume, output device selection.
+- Tearing everything down on disconnect, including releasing the OS microphone capture.
+
+## What it doesn't do
+
+- **Mint tokens.** Session minting is a server-side concern — it has to run where your API key lives. v1 ships no `agentId` public flow.
+- **Retries.** A failed `connect()` throws a [`SpekoClientError`](/client/errors). Retry logic belongs in your app's UX.
+- **Tool calls, guardrail hooks, MCP, VAD score streaming.** Deferred — see the package's `ROADMAP.md`.
+
+## Reference
+
+- [VoiceConversation](/client/voice-conversation) — the primary API surface.
+- [Callbacks & events](/client/callbacks) — every hook the SDK exposes.
+- [Data channel protocol](/client/data-channel) — wire format for inbound / outbound packets.
+- [Errors](/client/errors) — `SpekoClientError` and its codes.

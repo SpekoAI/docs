@@ -1,0 +1,100 @@
+---
+title: 'complete'
+description: 'POST /v1/complete — LLM completion with automatic provider routing.'
+---
+
+Run an LLM completion. The router picks the best LLM provider for your intent and fails over automatically.
+
+```ts
+const { text, provider } = await speko.complete({
+  messages: [{ role: 'user', content: 'Hi!' }],
+  intent: { language: 'en', vertical: 'general' },
+});
+```
+
+## Signature
+
+```ts
+speko.complete(
+  params: CompleteParams,
+  abortSignal?: AbortSignal,
+): Promise<CompleteResult>
+```
+
+## Parameters
+
+### `params: CompleteParams`
+
+| Field           | Type                           | Description                                                                |
+| --------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| `messages`      | `ChatMessage[]`                | Conversation history. Roles: `system`, `user`, `assistant`.                |
+| `intent`        | `RoutingIntent`                | `language`, `vertical`, optional `optimizeFor`.                            |
+| `systemPrompt`  | `string?`                      | Shortcut for a leading system message. Providers that distinguish the system channel use it natively; others fold it into the message list. |
+| `temperature`   | `number?`                      | Forwarded to the provider. Defaults to the provider's default.             |
+| `maxTokens`     | `number?`                      | Max completion tokens. Defaults to the provider's default.                 |
+| `constraints`   | `PipelineConstraints?`         | Allow-list constraints.                                                    |
+
+### `ChatMessage`
+
+```ts
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+```
+
+### `abortSignal?: AbortSignal`
+
+Cancel an in-flight request.
+
+## Returns
+
+### `CompleteResult`
+
+| Field                      | Type               | Description                                                        |
+| -------------------------- | ------------------ | ------------------------------------------------------------------ |
+| `text`                     | `string`           | Assistant reply.                                                   |
+| `provider`                 | `string`           | Upstream LLM provider (e.g. `openai`, `anthropic`, `groq`).        |
+| `model`                    | `string`           | Provider-specific model id.                                        |
+| `usage.promptTokens`       | `number`           | Prompt token count.                                                |
+| `usage.completionTokens`   | `number`           | Completion token count.                                            |
+| `failoverCount`            | `number`           | Providers tried before this one succeeded.                         |
+| `scoresRunId`              | `string \| null`   | Scoring run id that selected this provider.                        |
+
+## Non-streaming (v1)
+
+The `/v1/complete` endpoint is buffered — each call returns one full completion. Streaming is on the roadmap; until then, tools / function calling are also not exposed through the proxy.
+
+## Example: multi-turn
+
+```ts
+const messages: ChatMessage[] = [
+  { role: 'system', content: 'You are a concise voice assistant.' },
+  { role: 'user',   content: 'Book me an appointment for Tuesday.' },
+];
+
+const first = await speko.complete({
+  messages,
+  intent: { language: 'en', vertical: 'healthcare' },
+  temperature: 0.3,
+  maxTokens: 200,
+});
+
+messages.push({ role: 'assistant', content: first.text });
+messages.push({ role: 'user',      content: '3pm, with Dr. Chen.' });
+
+const second = await speko.complete({
+  messages,
+  intent: { language: 'en', vertical: 'healthcare' },
+});
+```
+
+## Example: pin a provider
+
+```ts
+await speko.complete({
+  messages: [...],
+  intent: { language: 'en', vertical: 'finance' },
+  constraints: { allowedProviders: { llm: ['anthropic'] } },
+});
+```

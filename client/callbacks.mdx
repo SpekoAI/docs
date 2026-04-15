@@ -1,0 +1,97 @@
+---
+title: 'Callbacks & events'
+description: 'Every hook VoiceConversation exposes, and when they fire.'
+---
+
+All callbacks are optional. Pass them inside the `ConversationOptions` object. They're invoked synchronously on the LiveKit event loop — keep them fast or defer work with `queueMicrotask`.
+
+## `ConversationStatus`
+
+```ts
+type ConversationStatus = 'connecting' | 'connected' | 'disconnecting' | 'disconnected';
+```
+
+Transitions:
+
+- **`connecting`** — the initial state, set the moment the `WebRTCConnection` is constructed.
+- **`connected`** — after `room.connect()`, `createLocalAudioTrack()`, and `publishTrack()` all succeed.
+- **`disconnecting`** — `endSession()` has been called but the room hasn't acknowledged yet.
+- **`disconnected`** — LiveKit has fired `Disconnected`, OR an error during `connect()` (connection, mic) short-circuited to this state.
+
+`onStatusChange` fires only on actual transitions; duplicate transitions are deduped.
+
+## `ConversationMode`
+
+```ts
+type ConversationMode = 'listening' | 'speaking';
+```
+
+Mirrors `RoomEvent.ActiveSpeakersChanged`: `speaking` when any remote participant is in the active-speakers set, `listening` otherwise. Useful for UI states like "agent talking now — show the voice animation".
+
+Deduped on transition — `onModeChange` won't fire twice for the same mode.
+
+## `ConversationMessage`
+
+```ts
+interface ConversationMessage {
+  source: 'agent' | 'user';
+  text: string;
+  isFinal: boolean;
+}
+```
+
+`onMessage` fires for every inbound data-channel packet the SDK recognises as a message:
+
+| Inbound packet        | Becomes                                                                 |
+| --------------------- | ----------------------------------------------------------------------- |
+| `transcript`          | `{ source: packet.source, text, isFinal: packet.isFinal ?? true }`      |
+| `agent_message`       | `{ source: 'agent', text, isFinal: packet.isFinal ?? true }`            |
+| `user_message_echo`   | `{ source: 'user', text, isFinal: true }`                               |
+
+Interim (`isFinal: false`) transcripts may arrive multiple times for the same utterance before a final one. Replace your in-progress transcript state keyed by `source`; finals are terminal.
+
+See [Data channel protocol](/client/data-channel) for the raw wire format.
+
+## `DisconnectionDetails`
+
+```ts
+interface DisconnectionDetails {
+  reason: DisconnectionReason;
+  message?: string;
+}
+
+type DisconnectionReason = 'user' | 'agent' | 'error' | 'timeout' | 'unknown';
+```
+
+The SDK maps LiveKit's `DisconnectReason` into a smaller, intent-oriented set:
+
+| LiveKit `DisconnectReason`                                         | Mapped `reason` |
+| ------------------------------------------------------------------ | --------------- |
+| `CLIENT_INITIATED`                                                 | `user`          |
+| `PARTICIPANT_REMOVED` / `ROOM_DELETED` / `ROOM_CLOSED`             | `agent`         |
+| `JOIN_FAILURE`                                                     | `error`         |
+| everything else (including `undefined`)                            | `unknown`       |
+
+`message` is the raw LiveKit enum name when available (useful for debugging / logging).
+
+## `onConnect`
+
+```ts
+onConnect?: (details: { conversationId: string }) => void;
+```
+
+Fires exactly once, after the mic is publishing and status is `connected`. `conversationId` is the LiveKit room name (same value as `conversation.getId()`).
+
+## `onError`
+
+```ts
+onError?: (error: Error) => void;
+```
+
+Non-fatal errors:
+
+- Malformed inbound data packets — wrapped in `SpekoClientError` with code `INVALID_MESSAGE`.
+- `RoomEvent.MediaDevicesError` from LiveKit.
+- Output device selection failures (`setSinkId` rejections).
+
+Fatal errors during `create()` are **thrown**, not routed to `onError`. See [Errors](/client/errors).

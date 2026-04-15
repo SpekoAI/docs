@@ -48,6 +48,46 @@
         ]
       },
       {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "@spekoai/sdk",
+            "pages": [
+              "sdk/overview",
+              "sdk/speko-client",
+              "sdk/transcribe",
+              "sdk/synthesize",
+              "sdk/complete",
+              "sdk/usage",
+              "sdk/types",
+              "sdk/errors"
+            ]
+          },
+          {
+            "group": "@spekoai/client",
+            "pages": [
+              "client/overview",
+              "client/voice-conversation",
+              "client/callbacks",
+              "client/data-channel",
+              "client/errors"
+            ]
+          },
+          {
+            "group": "@spekoai/adapter-livekit",
+            "pages": [
+              "adapter-livekit/overview",
+              "adapter-livekit/create-speko-components",
+              "adapter-livekit/speko-stt",
+              "adapter-livekit/speko-llm",
+              "adapter-livekit/speko-tts",
+              "adapter-livekit/intent",
+              "adapter-livekit/audio"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "API reference",
         "groups": [
           {

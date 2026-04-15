@@ -1,0 +1,108 @@
+---
+title: 'VoiceConversation'
+description: 'Primary API — construct, control, and tear down a voice session.'
+---
+
+`VoiceConversation` is the public class exported from `@spekoai/client`. Always construct it via the static `create()` factory — the factory awaits connection, so by the time it resolves the session is live.
+
+```ts
+import { VoiceConversation } from '@spekoai/client';
+```
+
+There is also a legacy namespace export, `Conversation`, with a single method `Conversation.startSession(options)` — it's an alias for `VoiceConversation.create(options)`, kept so consumers migrating from other SDKs can use familiar naming.
+
+## `VoiceConversation.create(options)`
+
+```ts
+static create(options: ConversationOptions): Promise<VoiceConversation>
+```
+
+Connects to LiveKit, publishes the microphone track, sends any [`overrides`](#conversationoverrides) over the data channel, fires `onConnect`, and resolves. Throws a [`SpekoClientError`](/client/errors) on connection or microphone failure.
+
+### `ConversationOptions`
+
+| Field              | Type                     | Required | Description                                                                 |
+| ------------------ | ------------------------ | -------- | --------------------------------------------------------------------------- |
+| `conversationToken`| `string`                 | ✅       | LiveKit room JWT, returned by your server.                                  |
+| `livekitUrl`       | `string`                 | ✅       | LiveKit WebSocket URL, returned by your server. Pass it straight through — the SDK does not default this so consumers can't ship against staging by accident. |
+| `overrides`        | `ConversationOverrides?` |          | Per-session agent / TTS overrides. Sent over the data channel right after connect. |
+| `inputDeviceId`    | `string?`                |          | Specific microphone `deviceId`.                                             |
+| `outputDeviceId`   | `string?`                |          | Specific speaker `deviceId`. Applied via `setSinkId`; silently ignored on browsers without support. |
+| `audioConstraints` | `AudioConstraints?`      |          | `echoCancellation`, `noiseSuppression`, `autoGainControl`. All default `true`. |
+| `onConnect`        | `(d: { conversationId }) => void` |          | Fired after the mic publishes and status becomes `connected`.        |
+| `onDisconnect`     | `(d: DisconnectionDetails) => void` |        | Fired on server or client disconnect.                                   |
+| `onMessage`        | `(m: ConversationMessage) => void` |          | Inbound transcripts, agent messages, user-message echoes.              |
+| `onStatusChange`   | `(s: ConversationStatus) => void` |          | `connecting → connected → disconnecting → disconnected`.                |
+| `onModeChange`     | `(m: ConversationMode) => void` |          | `listening` vs `speaking`, derived from LiveKit `ActiveSpeakersChanged`. |
+| `onError`          | `(err: Error) => void`   |          | Non-fatal errors (malformed data packets, media device errors, sink-id failures). |
+
+### `ConversationOverrides`
+
+```ts
+interface ConversationOverrides {
+  agent?: {
+    prompt?: string;
+    firstMessage?: string;
+    language?: string;
+  };
+  tts?: {
+    voiceId?: string;
+    speed?: number;
+  };
+}
+```
+
+Overrides are JSON-serialized and published over the data channel immediately after the mic is live. The agent worker can read them and reconfigure the session before its first reply.
+
+### `AudioConstraints`
+
+```ts
+interface AudioConstraints {
+  echoCancellation?: boolean;  // default true
+  noiseSuppression?: boolean;  // default true
+  autoGainControl?: boolean;   // default true
+}
+```
+
+The SDK always routes through `createLocalAudioTrack({ ... })` rather than `setMicrophoneEnabled(true)` so that constraints are applied even when no `inputDeviceId` is passed — `setMicrophoneEnabled` silently ignores them in that case.
+
+## Instance methods
+
+### `getId(): string`
+
+Returns the LiveKit room name (which doubles as the conversation id). Populated after `create()` resolves.
+
+### `isOpen(): boolean`
+
+`true` while the underlying status is `connected`.
+
+### `setMicMuted(muted: boolean): Promise<void>`
+
+Mute / unmute the local microphone track. Uses the track-level mute API when a track is attached; falls back to `LocalParticipant.setMicrophoneEnabled()` otherwise.
+
+### `setVolume(volume: number): void`
+
+Set playback volume for every remote audio element (0–1, clamped). Applied immediately to existing elements and to future ones.
+
+### `sendUserMessage(text: string): void`
+
+Publish a `user_message` packet over the reliable data channel. Use when the user types rather than speaks — the agent receives it inline with its transcript stream.
+
+### `sendContextualUpdate(text: string): void`
+
+Publish a `contextual_update` packet. Use for out-of-band context (e.g. "user switched to the checkout page"). Separate from `user_message` so agents can treat it as system-level context rather than a turn.
+
+### `endSession(): Promise<void>`
+
+Initiate clean disconnection. Sets status to `disconnecting`, asks LiveKit to disconnect; the room's `Disconnected` event completes the teardown (stops the mic track, removes audio elements, fires `onDisconnect`). Idempotent — calling it twice is a no-op.
+
+## Teardown invariants
+
+When disconnection completes (whether triggered by `endSession()`, agent leaving, token expiry, or error), the SDK:
+
+1. Sets status to `disconnected` and fires `onStatusChange`.
+2. Stops the local microphone track so the browser's mic indicator goes away.
+3. Detaches and removes every `<audio>` element it added to `document.body`.
+4. Fires `onDisconnect` with a mapped [`DisconnectionReason`](/client/callbacks#disconnectionreason).
+
+Your component's unmount effect should call `endSession()` so navigating away doesn't leak a LiveKit room.

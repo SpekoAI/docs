@@ -1,0 +1,109 @@
+---
+title: 'synthesize'
+description: 'POST /v1/synthesize — text-to-speech with automatic provider routing.'
+---
+
+Synthesize text into audio. The router picks the best TTS provider for your `(language, vertical, optimizeFor)` and fails over automatically.
+
+```ts
+const result = await speko.synthesize('Hello world', {
+  language: 'en',
+  vertical: 'general',
+});
+```
+
+## Signature
+
+```ts
+speko.synthesize(
+  text: string,
+  options: SynthesizeOptions,
+  abortSignal?: AbortSignal,
+): Promise<SynthesizeResult>
+```
+
+## Parameters
+
+### `text: string`
+
+The text to synthesize. No length limit is enforced client-side — the upstream provider applies its own.
+
+### `options: SynthesizeOptions`
+
+Extends [`RoutingIntent`](/sdk/types#routingintent):
+
+| Field           | Type                       | Description                                                                                    |
+| --------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `language`      | `string` (BCP-47)          | e.g. `"en"`, `"es-MX"`.                                                                        |
+| `vertical`      | `Vertical`                 | `general`, `healthcare`, `finance`, `legal`.                                                   |
+| `optimizeFor`   | `OptimizeFor?`             | `balanced`, `accuracy`, `latency`, `cost`.                                                     |
+| `voice`         | `string?`                  | Voice id override. The router interprets it per provider (e.g. a Cartesia voice UUID).          |
+| `speed`         | `number?`                  | Speech speed multiplier. Providers vary in what range they accept — `1.0` is always neutral.    |
+| `constraints`   | `PipelineConstraints?`     | Allow-list constraints.                                                                        |
+
+### `abortSignal?: AbortSignal`
+
+Cancel an in-flight request.
+
+## Returns
+
+### `SynthesizeResult`
+
+| Field            | Type               | Description                                                                                      |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
+| `audio`          | `Uint8Array`       | Raw audio bytes. Format depends on the chosen provider — always check `contentType`.             |
+| `contentType`    | `string`           | MIME type. ElevenLabs returns `audio/mpeg`. Cartesia returns `audio/pcm;rate=24000`.             |
+| `provider`       | `string`           | Upstream provider that ran the request.                                                          |
+| `model`          | `string`           | Provider-specific model identifier (e.g. voice model name).                                      |
+| `failoverCount`  | `number`           | Providers tried before this one succeeded.                                                       |
+| `scoresRunId`    | `string \| null`   | Scoring run id that selected this provider.                                                      |
+
+## Wire format
+
+The SDK sends `POST /v1/synthesize` with a JSON body:
+
+```json
+{
+  "text": "Hello world",
+  "intent": { "language": "en", "vertical": "general", "optimizeFor": "latency" },
+  "voice": "…",
+  "speed": 1.0,
+  "constraints": { "allowedProviders": { "tts": ["cartesia"] } }
+}
+```
+
+The response is binary audio. `provider`, `model`, `failoverCount`, and `scoresRunId` are parsed from response headers (`X-Speko-Provider`, `X-Speko-Model`, `X-Speko-Failover-Count`, `X-Speko-Scores-Run-Id`).
+
+## Example: write to disk
+
+```ts
+import { writeFile } from 'node:fs/promises';
+
+const result = await speko.synthesize('Welcome to the clinic.', {
+  language: 'en',
+  vertical: 'healthcare',
+  voice: 'sonic-english',
+});
+
+const ext = result.contentType.includes('mpeg')
+  ? 'mp3'
+  : result.contentType.includes('pcm')
+    ? 'pcm'
+    : 'bin';
+
+await writeFile(`greeting.${ext}`, result.audio);
+```
+
+## Example: pin a provider for deterministic output
+
+```ts
+await speko.synthesize('…', {
+  language: 'en',
+  vertical: 'general',
+  constraints: { allowedProviders: { tts: ['cartesia'] } },
+});
+```
+
+## Format gotchas
+
+The return type depends on the provider Speko picks. If your downstream consumer only handles PCM (e.g. [`@spekoai/adapter-livekit`](/adapter-livekit/speko-tts) v1), either pin a PCM provider via `constraints` or branch on `contentType` before you decode.

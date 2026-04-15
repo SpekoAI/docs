@@ -1,0 +1,94 @@
+---
+title: '@spekoai/adapter-livekit'
+description: 'LiveKit Agents adapter — route STT, LLM, and TTS through Speko.'
+---
+
+`@spekoai/adapter-livekit` bridges a [LiveKit Agents](https://docs.livekit.io/agents/) worker to the Speko proxy. Drop it into a standard agent entry file and the router picks the best STT, LLM, and TTS provider per call. Failover is server-side; you don't ship provider API keys.
+
+## Install
+
+```sh
+npm install @spekoai/sdk @spekoai/adapter-livekit \
+            @livekit/agents @livekit/agents-plugin-silero @livekit/rtc-node
+```
+
+`@livekit/agents` and `@livekit/rtc-node` are peer dependencies — pin the versions you actually run against in your own `package.json`.
+
+## Quickstart
+
+```ts
+import {
+  type JobContext,
+  type JobProcess,
+  ServerOptions,
+  cli,
+  defineAgent,
+  voice,
+} from '@livekit/agents';
+import * as silero from '@livekit/agents-plugin-silero';
+import { Speko } from '@spekoai/sdk';
+import { createSpekoComponents } from '@spekoai/adapter-livekit';
+import { fileURLToPath } from 'node:url';
+
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
+
+export default defineAgent({
+  prewarm: async (proc: JobProcess) => {
+    proc.userData.vad = await silero.VAD.load();
+  },
+  entry: async (ctx: JobContext) => {
+    const vad = ctx.proc.userData.vad as silero.VAD;
+
+    const { stt, llm, tts } = createSpekoComponents({
+      speko,
+      vad,
+      intent: { language: 'en-US', vertical: 'general', optimizeFor: 'balanced' },
+    });
+
+    const session = new voice.AgentSession({ vad, stt, llm, tts });
+
+    await session.start({
+      agent: new voice.Agent({
+        instructions: 'You are a helpful voice assistant. Be concise.',
+      }),
+      room: ctx.room,
+    });
+
+    await ctx.connect();
+    session.generateReply({ instructions: 'Greet the user and offer your assistance.' });
+  },
+});
+
+cli.runApp(
+  new ServerOptions({
+    agent: fileURLToPath(import.meta.url),
+    agentName: 'speko-demo',
+  }),
+);
+```
+
+## Architecture
+
+The adapter exports three `@livekit/agents`-compatible classes — `SpekoSTT`, `SpekoLLM`, `SpekoTTS` — and a convenience factory `createSpekoComponents()` that wraps STT and TTS with `StreamAdapter` helpers so the buffered Speko proxy can participate in a streaming `voice.AgentSession`:
+
+- **`SpekoSTT`** declares `{ streaming: false }`, so it must be wrapped with `new stt.StreamAdapter(spekoSTT, vad)` to segment utterances with VAD before calling `/v1/transcribe`.
+- **`SpekoTTS`** is buffered, so it must be wrapped with `new tts.StreamAdapter(spekoTTS, sentenceTokenizer)` so completion text is split sentence-by-sentence before each `/v1/synthesize` call.
+- **`SpekoLLM`** is used directly — it's a `llm.LLM` that returns a single-chunk `LLMStream` per call.
+
+`createSpekoComponents` handles the wrapping for you and returns `{ stt, llm, tts }` ready to pass to `voice.AgentSession`.
+
+## v1 limitations
+
+- **Non-streaming end-to-end.** STT waits for end-of-utterance, LLM returns a single chunk, TTS synthesizes an entire sentence before emitting audio. Latency is acceptable for interactive voice; interruption detection is less responsive than a fully-streaming plugin.
+- **No tool / function calls.** `/v1/complete` doesn't expose tool invocation yet. Passing a non-empty `toolCtx` logs a warning once and then ignores it.
+- **TTS output format.** Accepts `audio/pcm;rate=NNNN` (Cartesia) and `audio/wav`. Throws on `audio/mpeg` (ElevenLabs MP3) — pick a routing intent that prefers Cartesia, or pin a PCM-capable provider via `constraints.allowedProviders.tts`.
+- **STT input format.** Mono PCM16, encoded into a WAV wrapper per utterance. Multi-channel frames throw. Speko handles sample-rate conversion downstream — whatever the `AudioFrame` carries is what's uploaded.
+
+## Reference
+
+- [`createSpekoComponents`](/adapter-livekit/create-speko-components) — convenience factory.
+- [`SpekoSTT`](/adapter-livekit/speko-stt) — STT class.
+- [`SpekoLLM`](/adapter-livekit/speko-llm) — LLM class.
+- [`SpekoTTS`](/adapter-livekit/speko-tts) — TTS class.
+- [`Intent`](/adapter-livekit/intent) — routing hint type and validator.
+- [Audio helpers](/adapter-livekit/audio) — WAV encode/decode utilities.

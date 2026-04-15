@@ -1,0 +1,105 @@
+---
+title: 'SpekoTTS'
+description: 'LiveKit Agents TTS adapter backed by POST /v1/synthesize.'
+---
+
+`SpekoTTS` is a `tts.TTS` implementation. Each sentence is synthesised via the Speko proxy, decoded into PCM, chunked into `AudioFrame`s at 50 Hz (20 ms frames), and pushed to the LiveKit session.
+
+```ts
+import { SpekoTTS } from '@spekoai/adapter-livekit';
+import { tts as ttsNs, tokenize } from '@livekit/agents';
+
+const spekoTTS = new SpekoTTS({
+  speko,
+  intent: { language: 'en', vertical: 'general' },
+  voice: 'sonic-english',
+  sampleRate: 24_000,
+});
+
+const wrapped = new ttsNs.StreamAdapter(spekoTTS, new tokenize.basic.SentenceTokenizer());
+```
+
+## Constructor
+
+```ts
+new SpekoTTS(options: SpekoTTSOptions)
+```
+
+### `SpekoTTSOptions`
+
+| Field         | Type                                  | Required | Description                                                                                                               |
+| ------------- | ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `speko`       | `Speko`                               | ✅       | `@spekoai/sdk` client.                                                                                                    |
+| `intent`      | [`Intent`](/adapter-livekit/intent)   | ✅       | Validated at construction time.                                                                                           |
+| `voice`       | `string?`                             |          | Voice id forwarded to the proxy.                                                                                          |
+| `speed`       | `number?`                             |          | Speech-speed multiplier forwarded to the proxy.                                                                           |
+| `sampleRate`  | `number?`                             |          | Output sample rate advertised to LiveKit. Default `24000` (Cartesia Sonic). Must match what the upstream provider emits.  |
+| `constraints` | `PipelineConstraints?`                |          | Allow-list constraints.                                                                                                   |
+
+## Properties
+
+- `label = 'speko.TTS'`
+- `provider = 'speko'`
+- `model = 'speko-router'`
+- `numChannels = 1`, `streaming = false`
+
+## Streaming requirement
+
+`SpekoTTS.stream()` throws — the proxy is buffered. Wrap:
+
+```ts
+import { tts, tokenize } from '@livekit/agents';
+
+const adapter = new tts.StreamAdapter(spekoTTS, new tokenize.basic.SentenceTokenizer());
+```
+
+Or use [`createSpekoComponents`](/adapter-livekit/create-speko-components) which does this for you.
+
+## `.synthesize(text, connOptions?, abortSignal?)`
+
+Returns a `SpekoTTSChunkedStream` (exported for type use). Internally:
+
+1. Calls `speko.synthesize(text, { ...intent, voice, speed, constraints })`.
+2. Decodes the response via [`decodeSynthesisResult`](#decodesynthesisresult).
+3. Rejects if the decoded sample rate doesn't match the configured one — ensures playback isn't pitched.
+4. Chunks the PCM into `AudioFrame`s of `round(sampleRate / 50)` samples each via `AudioByteStream`.
+5. Pushes frames onto the output queue, marking the last one `final: true`.
+
+Empty provider output throws `SpekoTTS: provider returned empty audio`.
+
+## Audio format support (v1)
+
+`decodeSynthesisResult(result)` branches on `result.contentType`:
+
+| Content type                    | Behavior                                                                                                   |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `audio/pcm;rate=NNNN`           | Raw PCM, rate parsed from the MIME. Channels pinned to `1` (Cartesia's contract).                          |
+| `audio/wav` / `audio/x-wav`     | Header stripped via [`parseWav`](/adapter-livekit/audio#parsewav). Stereo WAV throws.                      |
+| `audio/mpeg`                    | Throws — v1 doesn't include an MP3 decoder. Pin Cartesia or another PCM-capable provider via `constraints`. |
+| anything else                   | Throws with provider info for debugging.                                                                   |
+
+Work around MP3 by pinning your TTS pool:
+
+```ts
+new SpekoTTS({
+  speko,
+  intent,
+  constraints: { allowedProviders: { tts: ['cartesia'] } },
+});
+```
+
+## Sample-rate mismatch
+
+If `sampleRate` option and the decoded rate disagree, synthesis rejects:
+
+```
+SpekoTTS: provider returned audio at 16000 Hz but the TTS was configured for 24000 Hz. Either set `sampleRate: 16000` on SpekoTTS or pin the Speko router to a provider that matches the expected rate.
+```
+
+## `decodeSynthesisResult`
+
+Exported for unit testing. Given a `SynthesizeResult`, returns `{ pcm, sampleRate, channels }`. Throws for unsupported content types (see table above).
+
+```ts
+import { decodeSynthesisResult } from '@spekoai/adapter-livekit';
+```

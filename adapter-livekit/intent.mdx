@@ -1,0 +1,62 @@
+---
+title: 'Intent'
+description: 'Routing hint type and construction-time validator.'
+---
+
+`Intent` is the routing hint every adapter class takes. It's a re-export of `RoutingIntent` from `@spekoai/sdk`, so anything you already have typed as a `RoutingIntent` passes through without conversion.
+
+```ts
+import type { Intent, OptimizeFor, Vertical } from '@spekoai/adapter-livekit';
+```
+
+## Type
+
+```ts
+type Intent = {
+  language: string;      // BCP-47
+  vertical: 'general' | 'healthcare' | 'finance' | 'legal';
+  optimizeFor?: 'balanced' | 'accuracy' | 'latency' | 'cost';
+};
+```
+
+## `validateIntent(intent)`
+
+Throws a descriptive `Error` when the intent is malformed. Called by every adapter class constructor, so a bad intent fails at construction time rather than deep inside the first STT / LLM / TTS call.
+
+```ts
+import { validateIntent } from '@spekoai/adapter-livekit';
+
+validateIntent({ language: 'en-US', vertical: 'general' });
+// ok
+
+validateIntent({ language: '', vertical: 'general' });
+// throws: SpekoAdapter: intent.language is required (BCP-47 tag)
+
+validateIntent({ language: 'en', vertical: 'crypto' as any });
+// throws: SpekoAdapter: unknown vertical "crypto". Expected one of: general, healthcare, finance, legal.
+```
+
+Validation rules:
+
+- `language` must be a non-empty string.
+- `vertical` must be one of `general`, `healthcare`, `finance`, `legal`.
+- `optimizeFor`, if set, must be one of `balanced`, `accuracy`, `latency`, `cost`.
+
+No BCP-47 syntactic validation beyond "is a non-empty string" — the router accepts short codes (`en`) and region-tagged codes (`es-MX`) and normalises downstream.
+
+## Sharing one intent
+
+The adapter pattern is "one intent per agent session, shared across modalities":
+
+```ts
+const intent: Intent = { language: 'en-US', vertical: 'healthcare', optimizeFor: 'latency' };
+
+const { stt, llm, tts } = createSpekoComponents({ speko, vad, intent });
+```
+
+If you need per-modality divergence (e.g. latency-optimised STT with cost-optimised TTS), construct the classes directly:
+
+```ts
+const sttAdapter = new SpekoSTT({ speko, intent: { ...intent, optimizeFor: 'latency' } });
+const ttsAdapter = new SpekoTTS({ speko, intent: { ...intent, optimizeFor: 'cost' } });
+```

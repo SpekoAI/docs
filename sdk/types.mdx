@@ -1,0 +1,171 @@
+---
+title: 'Types'
+description: 'Shared request / response types exported from @spekoai/sdk.'
+---
+
+All types below are exported from the package root:
+
+```ts
+import type {
+  SpekoClientOptions,
+  Vertical,
+  OptimizeFor,
+  RoutingIntent,
+  PipelineConstraints,
+  TranscribeOptions,
+  TranscribeResult,
+  SynthesizeOptions,
+  SynthesizeResult,
+  ChatMessage,
+  CompleteParams,
+  CompleteResult,
+  UsageSummary,
+  UsageByProvider,
+  UsageQueryParams,
+} from '@spekoai/sdk';
+```
+
+## Routing primitives
+
+### `Vertical`
+
+```ts
+type Vertical = 'general' | 'healthcare' | 'finance' | 'legal';
+```
+
+Vertical labels the router uses to pick a provider. Each vertical has its own benchmark set.
+
+### `OptimizeFor`
+
+```ts
+type OptimizeFor = 'balanced' | 'accuracy' | 'latency' | 'cost';
+```
+
+Biases the weighted score the router uses to rank candidates. `balanced` is the default.
+
+### `RoutingIntent`
+
+```ts
+interface RoutingIntent {
+  language: string;       // BCP-47, e.g. "en" or "es-MX"
+  vertical: Vertical;
+  optimizeFor?: OptimizeFor;
+}
+```
+
+Every proxy call takes one. `TranscribeOptions` and `SynthesizeOptions` extend it directly.
+
+### `PipelineConstraints`
+
+```ts
+interface PipelineConstraints {
+  allowedProviders?: {
+    stt?: string[];
+    llm?: string[];
+    tts?: string[];
+  };
+}
+```
+
+Optional allow-list layered on top of `RoutingIntent`. When set, the router still ranks by benchmark score but considers only candidates in the allow-list for that modality.
+
+## Transcribe
+
+```ts
+interface TranscribeOptions extends RoutingIntent {
+  contentType?: string;          // default "audio/wav"
+  constraints?: PipelineConstraints;
+}
+
+interface TranscribeResult {
+  text: string;
+  provider: string;
+  model: string;
+  confidence: number | null;
+  failoverCount: number;
+  scoresRunId: string | null;
+}
+```
+
+## Synthesize
+
+```ts
+interface SynthesizeOptions extends RoutingIntent {
+  voice?: string;
+  speed?: number;
+  constraints?: PipelineConstraints;
+}
+
+interface SynthesizeResult {
+  audio: Uint8Array;
+  contentType: string;           // e.g. "audio/pcm;rate=24000" or "audio/mpeg"
+  provider: string;
+  model: string;
+  failoverCount: number;
+  scoresRunId: string | null;
+}
+```
+
+## Complete
+
+```ts
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface CompleteParams {
+  messages: ChatMessage[];
+  intent: RoutingIntent;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  constraints?: PipelineConstraints;
+}
+
+interface CompleteResult {
+  text: string;
+  provider: string;
+  model: string;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+  };
+  failoverCount: number;
+  scoresRunId: string | null;
+}
+```
+
+## Usage
+
+```ts
+interface UsageQueryParams {
+  from?: string;                 // ISO-8601
+  to?: string;                   // ISO-8601
+}
+
+interface UsageSummary {
+  totalSessions: number;
+  totalMinutes: number;
+  totalCost: number;
+  breakdown: UsageByProvider[];
+}
+
+interface UsageByProvider {
+  provider: string;
+  type: 'stt' | 'llm' | 'tts';
+  metric: string;
+  quantity: number;
+  cost: number;
+}
+```
+
+## Client
+
+```ts
+interface SpekoClientOptions {
+  apiKey: string;
+  baseUrl?: string;              // default "https://api.speko.ai"
+  timeout?: number;              // default 30000
+}
+```

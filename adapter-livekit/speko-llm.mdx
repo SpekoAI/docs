@@ -1,0 +1,109 @@
+---
+title: 'SpekoLLM'
+description: 'LiveKit Agents LLM adapter backed by POST /v1/complete.'
+---
+
+`SpekoLLM` is a `llm.LLM` implementation. It flattens a LiveKit `ChatContext` into Speko's `messages` format and calls the proxy. The router picks the best LLM provider per intent and fails over automatically.
+
+```ts
+import { SpekoLLM } from '@spekoai/adapter-livekit';
+
+const spekoLLM = new SpekoLLM({
+  speko,
+  intent: { language: 'en', vertical: 'general' },
+  temperature: 0.7,
+  maxTokens: 400,
+});
+```
+
+Unlike STT and TTS, `SpekoLLM` doesn't need a `StreamAdapter` — LiveKit's `voice.AgentSession` is happy with a non-streaming LLM that emits a single chunk.
+
+## Constructor
+
+```ts
+new SpekoLLM(options: SpekoLLMOptions)
+```
+
+### `SpekoLLMOptions`
+
+| Field          | Type                                  | Required | Description                                                   |
+| -------------- | ------------------------------------- | -------- | ------------------------------------------------------------- |
+| `speko`        | `Speko`                               | ✅       | `@spekoai/sdk` client.                                        |
+| `intent`       | [`Intent`](/adapter-livekit/intent)   | ✅       | Validated at construction time.                               |
+| `temperature`  | `number?`                             |          | Forwarded to `/v1/complete`.                                  |
+| `maxTokens`    | `number?`                             |          | Forwarded to `/v1/complete`.                                  |
+| `constraints`  | `PipelineConstraints?`                |          | Allow-list constraints.                                       |
+
+## Properties
+
+- `label() → 'speko.LLM'`
+- `provider = 'speko'`
+- `model = 'speko-router'`
+
+## `.chat(params)`
+
+Standard LiveKit LLM entry point. Returns an `LLMStream` that emits exactly one `ChatChunk` carrying the full assistant response, then closes.
+
+Signature (from `@livekit/agents`):
+
+```ts
+chat(params: {
+  chatCtx: llm.ChatContext;
+  toolCtx?: llm.ToolContext;
+  connOptions?: APIConnectOptions;
+  parallelToolCalls?: boolean;
+  toolChoice?: llm.ToolChoice;
+  extraKwargs?: Record<string, unknown>;
+}): llm.LLMStream;
+```
+
+The emitted chunk includes usage:
+
+```ts
+{
+  id: '<uuid>',
+  delta: { role: 'assistant', content: result.text },
+  usage: {
+    promptTokens: result.usage.promptTokens,
+    completionTokens: result.usage.completionTokens,
+    promptCachedTokens: 0,
+    totalTokens: result.usage.promptTokens + result.usage.completionTokens,
+  },
+}
+```
+
+## Context conversion — `chatContextToSpeko`
+
+Exported for when you want to reuse the flattening logic (e.g. unit tests, custom pipelines).
+
+```ts
+import { chatContextToSpeko } from '@spekoai/adapter-livekit';
+
+const messages = chatContextToSpeko(chatCtx);
+```
+
+Rules:
+
+- Only `llm.ChatMessage` items are considered. Function-call and handoff items are skipped.
+- Roles are normalised: `developer` → `system`; `system` / `user` / `assistant` pass through; anything else is dropped.
+- Empty `textContent` messages are skipped.
+- Ordering is preserved.
+
+If the result is empty, `.chat()` rejects with `SpekoAdapterError('INVALID_CONTEXT')`.
+
+## v1 — no tool calls
+
+`/v1/complete` doesn't expose tool invocation yet. If a non-empty `toolCtx` is passed, the adapter warns once (deduped per instance) and proceeds as if no tools were set:
+
+```
+SpekoLLM: tool calls are not supported in v1 — `toolCtx` is being ignored. …
+```
+
+Remove tools from the agent or wait for streaming LLM proxy support.
+
+## Errors
+
+- `SpekoAdapterError` (exported): thrown for adapter-internal problems. `code` is one of:
+  - `'INVALID_CONTEXT'` — `ChatContext` produced no convertible messages.
+
+API-layer errors from the underlying `speko.complete()` surface unchanged — `SpekoApiError`, `SpekoAuthError`, `SpekoRateLimitError` from `@spekoai/sdk`.

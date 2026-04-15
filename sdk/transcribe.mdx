@@ -1,0 +1,96 @@
+---
+title: 'transcribe'
+description: 'POST /v1/transcribe — speech-to-text with automatic provider routing.'
+---
+
+Transcribe an audio payload. The router picks the best STT provider for your `(language, vertical, optimizeFor)` and fails over automatically.
+
+```ts
+const { text, provider, confidence } = await speko.transcribe(audio, {
+  language: 'es-MX',
+  vertical: 'healthcare',
+});
+```
+
+## Signature
+
+```ts
+speko.transcribe(
+  audio: Uint8Array,
+  options: TranscribeOptions,
+  abortSignal?: AbortSignal,
+): Promise<TranscribeResult>
+```
+
+## Parameters
+
+### `audio: Uint8Array`
+
+Raw audio bytes. Default MIME is `audio/wav`; set `options.contentType` if you send something else. Providers handle resampling and format conversion downstream — you don't have to match a specific sample rate.
+
+### `options: TranscribeOptions`
+
+Extends [`RoutingIntent`](/sdk/types#routingintent):
+
+| Field           | Type                                           | Description                                                                          |
+| --------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `language`      | `string` (BCP-47)                              | e.g. `"en"`, `"es-MX"`, `"ja-JP"`.                                                   |
+| `vertical`      | `'general' \| 'healthcare' \| 'finance' \| 'legal'` | Vertical label used by the router.                                                   |
+| `optimizeFor`   | `'balanced' \| 'accuracy' \| 'latency' \| 'cost'?` | Bias the weighted score. Defaults to the server-side default (currently `balanced`). |
+| `contentType`   | `string?`                                      | MIME type for the body. Defaults to `audio/wav`.                                     |
+| `constraints`   | `PipelineConstraints?`                         | Allow-list constraints (see [Types](/sdk/types#pipelineconstraints)).                |
+
+### `abortSignal?: AbortSignal`
+
+Cancel an in-flight request. Composed with the client-level timeout.
+
+## Returns
+
+### `TranscribeResult`
+
+| Field            | Type               | Description                                                                                 |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------- |
+| `text`           | `string`           | Transcribed text.                                                                           |
+| `provider`       | `string`           | Upstream provider that ran the request (e.g. `deepgram`, `openai`).                        |
+| `model`          | `string`           | Provider-specific model identifier.                                                         |
+| `confidence`     | `number \| null`   | Model-reported confidence when available, else `null`.                                      |
+| `failoverCount`  | `number`           | How many providers were tried before this one succeeded.                                    |
+| `scoresRunId`    | `string \| null`   | ID of the scoring run that selected this provider — useful for joining to benchmark data.   |
+
+## Wire format
+
+The SDK sends the audio as the raw HTTP body with:
+
+- `Content-Type`: from `options.contentType` (default `audio/wav`).
+- `X-Speko-Intent`: JSON-serialized `{ language, vertical, optimizeFor? }`.
+- `X-Speko-Constraints`: JSON-serialized `options.constraints` (only if set).
+
+The response is a JSON `TranscribeResult`.
+
+## Example: non-default MIME
+
+```ts
+import { readFile } from 'node:fs/promises';
+
+const audio = await readFile('./call.ogg');
+const result = await speko.transcribe(audio, {
+  language: 'en',
+  vertical: 'general',
+  contentType: 'audio/ogg',
+  optimizeFor: 'accuracy',
+});
+```
+
+## Example: restrict provider pool
+
+```ts
+const result = await speko.transcribe(audio, {
+  language: 'en',
+  vertical: 'healthcare',
+  constraints: {
+    allowedProviders: { stt: ['deepgram', 'assemblyai'] },
+  },
+});
+```
+
+The router still ranks candidates by benchmark score and only picks from the allow-list.

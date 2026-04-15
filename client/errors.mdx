@@ -1,0 +1,55 @@
+---
+title: 'Errors'
+description: 'SpekoClientError and its error codes.'
+---
+
+The client SDK throws a single error class, `SpekoClientError`, tagged with a stable string code.
+
+```ts
+import { SpekoClientError } from '@spekoai/client';
+import type { SpekoClientErrorCode } from '@spekoai/client';
+```
+
+## Shape
+
+```ts
+class SpekoClientError extends Error {
+  code: SpekoClientErrorCode;
+  cause?: unknown;   // original error when wrapping (e.g. livekit-client failures)
+}
+```
+
+## Codes
+
+| Code                  | Where it's thrown                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `CONNECTION_FAILED`   | `VoiceConversation.create()` — `room.connect()` rejected. `cause` is the original LiveKit error.            |
+| `MICROPHONE_FAILED`   | `create()` — mic acquisition or `publishTrack()` failed. The room is disconnected before this is thrown.    |
+| `NOT_CONNECTED`       | `sendUserMessage` / `sendContextualUpdate` / internal `publish()` called while status isn't `connected`.    |
+| `INVALID_MESSAGE`     | Routed to `onError` when an inbound data packet isn't valid JSON or is missing `type`.                      |
+| `DISCONNECTED`        | Reserved for future use.                                                                                    |
+
+## Fatal vs non-fatal
+
+- **Fatal errors** (connection and microphone failures during `create()`) are **thrown** from the `create()` promise so callers can branch at construction time.
+- **Non-fatal errors** (malformed packets, media device errors from LiveKit) are **routed to `onError`**. The session continues.
+
+## Example
+
+```ts
+try {
+  const conv = await VoiceConversation.create({ ... });
+} catch (err) {
+  if (err instanceof SpekoClientError) {
+    switch (err.code) {
+      case 'CONNECTION_FAILED':
+        // Token expired, network issue, or LiveKit outage — ask user to retry.
+        break;
+      case 'MICROPHONE_FAILED':
+        // Permission denied or device in use — surface a permissions prompt.
+        break;
+    }
+  }
+  throw err;
+}
+```

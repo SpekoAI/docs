@@ -1,0 +1,113 @@
+---
+title: 'Data channel protocol'
+description: 'Wire format for packets exchanged between browser and agent over LiveKit data channels.'
+---
+
+Every non-audio signal — transcripts, overrides, user-typed messages — travels as JSON-encoded bytes on LiveKit's reliable data channel. `@spekoai/client` handles encoding and decoding internally; this page documents the wire format so server / agent implementations can interoperate.
+
+## Encoding
+
+- UTF-8 JSON, one message per `publishData` call.
+- Reliable ordering (`reliable: true`).
+- No framing beyond JSON — each `DataReceived` event is one complete packet.
+
+## Outbound (browser → agent)
+
+### `overrides`
+
+Sent once, immediately after the mic publishes, if the browser passed an `overrides` option.
+
+```json
+{
+  "type": "overrides",
+  "overrides": {
+    "agent": {
+      "prompt": "You are a helpful receptionist.",
+      "firstMessage": "Hi, how can I help?",
+      "language": "en-US"
+    },
+    "tts": {
+      "voiceId": "sonic-english",
+      "speed": 1.0
+    }
+  }
+}
+```
+
+Any subfield is optional. The agent worker is responsible for applying what it receives.
+
+### `user_message`
+
+Sent by `conversation.sendUserMessage(text)`. Use when the user types rather than speaks.
+
+```json
+{ "type": "user_message", "text": "I'd like to reschedule." }
+```
+
+### `contextual_update`
+
+Sent by `conversation.sendContextualUpdate(text)`. Out-of-band context that shouldn't be treated as a turn.
+
+```json
+{ "type": "contextual_update", "text": "user switched to the checkout page" }
+```
+
+## Inbound (agent → browser)
+
+### `transcript`
+
+STT output for either speaker.
+
+```json
+{
+  "type": "transcript",
+  "source": "user",
+  "text": "Hello there.",
+  "isFinal": true
+}
+```
+
+`isFinal` defaults to `true` when omitted.
+
+### `agent_message`
+
+An assistant message emitted by the agent — typically streamed token-by-token as `isFinal: false` and closed with `isFinal: true`.
+
+```json
+{ "type": "agent_message", "text": "Happy to help!", "isFinal": true }
+```
+
+### `user_message_echo`
+
+Echo of a typed `user_message` so the UI can render it in the same transcript stream. `isFinal` is always implicitly `true`.
+
+```json
+{ "type": "user_message_echo", "text": "I'd like to reschedule." }
+```
+
+## Forwarding to `onMessage`
+
+The SDK converts each inbound packet into a [`ConversationMessage`](/client/callbacks#conversationmessage):
+
+```ts
+// pseudocode
+switch (packet.type) {
+  case 'transcript':
+    return { source: packet.source, text: packet.text, isFinal: packet.isFinal ?? true };
+  case 'agent_message':
+    return { source: 'agent', text: packet.text, isFinal: packet.isFinal ?? true };
+  case 'user_message_echo':
+    return { source: 'user', text: packet.text, isFinal: true };
+}
+```
+
+Unknown packet types are ignored (no message fired, no error). Malformed JSON triggers `onError` with `SpekoClientError('…', 'INVALID_MESSAGE')` instead.
+
+## Extending the protocol
+
+If you need a new packet type, add it on both sides:
+
+1. Agent worker publishes a new `type` value.
+2. Extend `InboundPacket` in `@spekoai/client` and handle it in `packetToMessage` (or ship a wrapper that subscribes to `room.on('dataReceived')` directly).
+
+Outbound packet types are similarly open — `WebRTCConnection.publish(packet)` accepts any `OutboundPacket`, which you can widen in a fork.

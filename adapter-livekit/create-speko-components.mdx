@@ -1,0 +1,102 @@
+---
+title: 'createSpekoComponents'
+description: 'Build a { stt, llm, tts } bundle ready for voice.AgentSession.'
+---
+
+`createSpekoComponents` is the one-call wiring helper for `voice.AgentSession`. It constructs `SpekoSTT`, `SpekoLLM`, `SpekoTTS` from a single options object and wraps STT and TTS with LiveKit's `StreamAdapter` so the buffered Speko proxy can drive a streaming session.
+
+```ts
+import { createSpekoComponents } from '@spekoai/adapter-livekit';
+
+const { stt, llm, tts } = createSpekoComponents({
+  speko,
+  vad,
+  intent: { language: 'en-US', vertical: 'general', optimizeFor: 'balanced' },
+});
+
+const session = new voice.AgentSession({ vad, stt, llm, tts });
+```
+
+## Signature
+
+```ts
+function createSpekoComponents(
+  options: CreateSpekoComponentsOptions,
+): SpekoComponents;
+```
+
+## `CreateSpekoComponentsOptions`
+
+| Field               | Type                                                    | Required | Description                                                                                       |
+| ------------------- | ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `speko`             | `Speko`                                                 | ✅       | Initialised `@spekoai/sdk` client.                                                                |
+| `intent`            | [`Intent`](/adapter-livekit/intent)                     | ✅       | Routing hint shared by STT, LLM, and TTS.                                                         |
+| `vad`               | `VAD`                                                   | ✅       | VAD instance used by the `stt.StreamAdapter`. Typically `await silero.VAD.load()`.                |
+| `voice`             | `string?`                                               |          | Voice id passed to `SpekoTTS` (maps to the Speko proxy's `voice` param).                          |
+| `constraints`       | `PipelineConstraints?`                                  |          | Allow-list constraints applied to all three modalities.                                           |
+| `sentenceTokenizer` | `tokenize.SentenceTokenizer?`                           |          | Tokenizer for chunking LLM output before TTS. Defaults to `tokenize.basic.SentenceTokenizer`.     |
+| `llm`               | `{ temperature?, maxTokens? }?`                         |          | Tuning forwarded to `/v1/complete`.                                                               |
+| `ttsOptions`        | `{ sampleRate?, speed? }?`                              |          | Output sample rate and speech speed forwarded to `SpekoTTS`.                                      |
+
+## Returns — `SpekoComponents`
+
+```ts
+interface SpekoComponents {
+  stt: stt.StreamAdapter;   // wraps SpekoSTT + vad
+  llm: SpekoLLM;            // used directly
+  tts: tts.StreamAdapter;   // wraps SpekoTTS + sentenceTokenizer
+}
+```
+
+Drop the returned object straight into a `voice.AgentSession`.
+
+## Custom sentence tokenizer
+
+```ts
+import { tokenize } from '@livekit/agents';
+
+const { stt, llm, tts } = createSpekoComponents({
+  speko,
+  vad,
+  intent,
+  sentenceTokenizer: new tokenize.basic.SentenceTokenizer({ minSentenceLength: 20 }),
+});
+```
+
+Use a longer minimum sentence length if you want fewer, longer TTS calls at the cost of latency before the first audio chunk.
+
+## Constraints shared across modalities
+
+```ts
+createSpekoComponents({
+  speko,
+  vad,
+  intent: { language: 'en', vertical: 'healthcare' },
+  constraints: {
+    allowedProviders: {
+      stt: ['deepgram'],
+      llm: ['anthropic'],
+      tts: ['cartesia'],
+    },
+  },
+});
+```
+
+Every underlying call (`/v1/transcribe`, `/v1/complete`, `/v1/synthesize`) receives the same constraints object.
+
+## Opting out — use classes directly
+
+If you need finer control, construct the classes yourself. `createSpekoComponents` is a convenience wrapper; nothing stops you from building the pipeline manually.
+
+```ts
+import { SpekoSTT, SpekoLLM, SpekoTTS } from '@spekoai/adapter-livekit';
+import { stt, tts, tokenize } from '@livekit/agents';
+
+const spekoSTT = new SpekoSTT({ speko, intent });
+const wrappedSTT = new stt.StreamAdapter(spekoSTT, vad);
+
+const spekoLLM = new SpekoLLM({ speko, intent, temperature: 0.7 });
+
+const spekoTTS = new SpekoTTS({ speko, intent, voice: 'sonic-english' });
+const wrappedTTS = new tts.StreamAdapter(spekoTTS, new tokenize.basic.SentenceTokenizer());
+```

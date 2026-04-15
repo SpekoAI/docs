@@ -1,0 +1,61 @@
+---
+title: 'usage'
+description: 'GET /v1/usage — billing and usage reporting.'
+---
+
+Get a usage summary for a billing period. Exposed via `speko.usage`.
+
+```ts
+const usage = await speko.usage.get();
+console.log(usage.totalSessions, usage.totalMinutes, usage.totalCost);
+```
+
+## `speko.usage.get(params?)`
+
+### Signature
+
+```ts
+speko.usage.get(params?: UsageQueryParams): Promise<UsageSummary>
+```
+
+### `UsageQueryParams`
+
+| Field  | Type      | Description                                                        |
+| ------ | --------- | ------------------------------------------------------------------ |
+| `from` | `string?` | ISO-8601 start date. Omit to default to the current billing start. |
+| `to`   | `string?` | ISO-8601 end date. Omit to default to now.                         |
+
+### Returns — `UsageSummary`
+
+| Field            | Type                | Description                                                   |
+| ---------------- | ------------------- | ------------------------------------------------------------- |
+| `totalSessions`  | `number`            | Distinct sessions in range.                                   |
+| `totalMinutes`   | `number`            | Total audio minutes billed.                                   |
+| `totalCost`      | `number`            | Total cost in USD.                                            |
+| `breakdown`      | `UsageByProvider[]` | Per-provider rollup (see below).                              |
+
+### `UsageByProvider`
+
+| Field       | Type                         | Description                                               |
+| ----------- | ---------------------------- | --------------------------------------------------------- |
+| `provider`  | `string`                     | Upstream provider id.                                     |
+| `type`      | `'stt' \| 'llm' \| 'tts'`    | Modality.                                                 |
+| `metric`    | `string`                     | The billable metric (e.g. `minutes`, `characters`, `tokens`). |
+| `quantity`  | `number`                     | Billed quantity in the metric's unit.                     |
+| `cost`      | `number`                     | Cost in USD.                                              |
+
+## Example: last 24 hours
+
+```ts
+const now = new Date();
+const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+const usage = await speko.usage.get({
+  from: yesterday.toISOString(),
+  to: now.toISOString(),
+});
+
+for (const row of usage.breakdown) {
+  console.log(`${row.type}\t${row.provider}\t${row.quantity}${row.metric}\t$${row.cost}`);
+}
+```

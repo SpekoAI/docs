@@ -1,0 +1,80 @@
+---
+title: 'Audio helpers'
+description: 'WAV encode / decode and MIME parsing utilities.'
+---
+
+The adapter exports the three audio helpers it uses internally. They're stable exports — safe to reuse if you're building custom pipelines or writing tests.
+
+```ts
+import {
+  framesToWav,
+  parseWav,
+  pcmSampleRateFromContentType,
+} from '@spekoai/adapter-livekit';
+```
+
+## `framesToWav`
+
+```ts
+function framesToWav(buffer: AudioBuffer): Uint8Array;
+```
+
+Encode one or more LiveKit `AudioFrame`s (or an array) into a PCM16 mono WAV byte stream. Used by `SpekoSTT` to wrap each utterance before uploading to `/v1/transcribe`.
+
+- Combines frames via `combineAudioFrames` from `@livekit/rtc-node`.
+- Writes a standard 44-byte RIFF/WAVE header: `fmt ` chunk (PCM, 16-bit, mono, `sampleRate` from frames) + `data` chunk.
+- Sample rate is pulled from the input frames — whatever LiveKit gives you is what's encoded.
+
+**Mono-only.** A multi-channel `AudioBuffer` throws:
+
+```
+SpekoSTT: expected mono audio (1 channel), got 2. Configure your LiveKit AgentSession to pass mono audio or pre-mix upstream of the STT.
+```
+
+## `parseWav`
+
+```ts
+function parseWav(bytes: Uint8Array): {
+  pcm: Uint8Array;
+  sampleRate: number;
+  channels: number;
+};
+```
+
+Minimal PCM16 WAV parser. Used by `SpekoTTS` to unwrap WAV-encoded proxy responses into raw samples for `AudioByteStream`.
+
+Accepted subset:
+
+- Valid `RIFF` / `WAVE` header.
+- `fmt ` chunk present and of `format = 1` (PCM).
+- 16-bit samples.
+- `data` chunk reachable by walking subsequent chunks (tolerates e.g. `LIST` chunks between `fmt ` and `data`).
+
+Anything outside this subset throws a descriptive error. `channels` is returned as-is — the caller is responsible for deciding whether stereo is acceptable. `SpekoTTS` currently throws on stereo.
+
+## `pcmSampleRateFromContentType`
+
+```ts
+function pcmSampleRateFromContentType(
+  contentType: string,
+  fallback: number,
+): number;
+```
+
+Parse the `rate` parameter out of a Cartesia-style content type:
+
+```ts
+pcmSampleRateFromContentType('audio/pcm;rate=24000', 16_000); // 24000
+pcmSampleRateFromContentType('audio/pcm', 16_000);            // 16000
+pcmSampleRateFromContentType('audio/pcm;rate=abc', 16_000);   // 16000
+```
+
+Falls back when the rate is missing, zero, or unparseable. Case-insensitive on `rate=`.
+
+## Intended usage
+
+You shouldn't need these helpers when consuming the adapter through [`createSpekoComponents`](/adapter-livekit/create-speko-components) — they're used internally by `SpekoSTT` and `SpekoTTS`. They're exported for:
+
+- **Unit tests** — build canned WAV fixtures with `framesToWav`, round-trip them through `parseWav`.
+- **Custom STT / TTS pipelines** that need to reuse the same WAV framing Speko uses.
+- **Debugging** — decode what an upstream provider returned without instantiating a full TTS.
