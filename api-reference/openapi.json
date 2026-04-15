@@ -1,0 +1,455 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Speko API",
+    "version": "1.0.0",
+    "description": "Public REST API for the Speko voice gateway. Routes, transcribes, synthesizes, and completes via the highest-scoring provider for your routing intent, with transparent server-side failover.",
+    "contact": {
+      "email": "abat@speko.ai"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.speko.dev",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/sessions": {
+      "post": {
+        "summary": "Create a real-time voice session",
+        "description": "Mints a LiveKit access token, persists the pipeline config, and dispatches an agent worker into the room. Use the returned `conversationToken` and `livekitUrl` with `@spekoai/client` to join the room from a browser.",
+        "operationId": "createSession",
+        "tags": ["Voice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateSessionResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/SessionCreateFailed" }
+        }
+      }
+    },
+    "/v1/transcribe": {
+      "post": {
+        "summary": "Transcribe audio (speech to text)",
+        "description": "Routes the request to the best STT provider for your `(language, vertical, optimizeFor)` intent, with automatic failover to runner-up providers. Body is binary audio. Routing intent goes in the `x-speko-intent` header (JSON).",
+        "operationId": "transcribe",
+        "tags": ["Voice"],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-speko-intent",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "JSON-encoded `RoutingIntent`. Example: `{\"language\":\"en-US\",\"vertical\":\"general\"}`."
+          },
+          {
+            "in": "header",
+            "name": "x-speko-constraints",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Optional JSON-encoded `PipelineConstraints`. Example: `{\"allowedProviders\":{\"stt\":[\"deepgram\"]}}`."
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "required": false,
+            "schema": { "type": "string", "examples": ["audio/wav", "audio/mpeg", "audio/pcm;rate=16000"] },
+            "description": "Audio MIME type. Recommended for the upstream provider to interpret the body."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Binary audio. WAV, MP3, or raw PCM accepted.",
+          "content": {
+            "application/octet-stream": {
+              "schema": { "type": "string", "format": "binary" }
+            },
+            "audio/wav": {
+              "schema": { "type": "string", "format": "binary" }
+            },
+            "audio/mpeg": {
+              "schema": { "type": "string", "format": "binary" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcript",
+            "headers": { "$ref": "#/components/headers/RoutingHeaders" },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TranscribeResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidAudio" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/TranscribeFailed" }
+        }
+      }
+    },
+    "/v1/synthesize": {
+      "post": {
+        "summary": "Synthesize speech (text to speech)",
+        "description": "Routes the request to the best TTS provider for your intent, with automatic failover. Returns binary audio. The `Content-Type` header (mirrored in `X-Speko-Audio-Format`) tells you the format.",
+        "operationId": "synthesize",
+        "tags": ["Voice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SynthesizeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audio bytes",
+            "headers": {
+              "Content-Type": {
+                "schema": { "type": "string" },
+                "description": "Audio MIME type, e.g. `audio/pcm;rate=24000` or `audio/mpeg`."
+              },
+              "X-Speko-Audio-Format": {
+                "schema": { "type": "string" },
+                "description": "Mirrors `Content-Type` for client-side dispatch."
+              },
+              "X-Speko-Provider": { "schema": { "type": "string" } },
+              "X-Speko-Model": { "schema": { "type": "string" } },
+              "X-Speko-Failover-Count": { "schema": { "type": "integer" } },
+              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" } }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/SynthesizeFailed" }
+        }
+      }
+    },
+    "/v1/complete": {
+      "post": {
+        "summary": "Generate an LLM completion",
+        "description": "Single-turn LLM call routed to the best provider for your intent, with automatic failover. Returns assistant text + token usage.",
+        "operationId": "complete",
+        "tags": ["Voice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CompleteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completion",
+            "headers": { "$ref": "#/components/headers/RoutingHeaders" },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CompleteResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/CompleteFailed" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key (sk_live_...)"
+      }
+    },
+    "schemas": {
+      "RoutingIntent": {
+        "type": "object",
+        "required": ["language", "vertical"],
+        "properties": {
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+            "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
+            "example": "en-US"
+          },
+          "vertical": {
+            "type": "string",
+            "enum": ["general", "healthcare", "finance", "legal"],
+            "example": "general"
+          },
+          "optimizeFor": {
+            "type": "string",
+            "enum": ["balanced", "accuracy", "latency", "cost"],
+            "default": "balanced"
+          }
+        }
+      },
+      "PipelineConstraints": {
+        "type": "object",
+        "properties": {
+          "allowedProviders": {
+            "type": "object",
+            "description": "Restrict candidate pool per modality. Router still ranks by score.",
+            "properties": {
+              "stt": { "type": "array", "items": { "type": "string" } },
+              "llm": { "type": "array", "items": { "type": "string" } },
+              "tts": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "ChatMessage": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "enum": ["system", "user", "assistant"] },
+          "content": { "type": "string" }
+        }
+      },
+      "CreateSessionRequest": {
+        "type": "object",
+        "required": ["intent"],
+        "properties": {
+          "intent": { "$ref": "#/components/schemas/RoutingIntent" },
+          "constraints": { "$ref": "#/components/schemas/PipelineConstraints" },
+          "voice": {
+            "type": "string",
+            "description": "Force a specific TTS voice id."
+          },
+          "systemPrompt": {
+            "type": "string",
+            "description": "Initial agent instructions."
+          },
+          "llm": {
+            "type": "object",
+            "properties": {
+              "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+              "maxTokens": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "ttsOptions": {
+            "type": "object",
+            "properties": {
+              "sampleRate": { "type": "integer", "minimum": 1 },
+              "speed": { "type": "number", "minimum": 0.5, "maximum": 2 }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Arbitrary key/value pairs stored on the session row."
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "default": 900,
+            "minimum": 1,
+            "maximum": 86400,
+            "description": "Token TTL."
+          },
+          "identity": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "LiveKit participant identity. Defaults to `user_<uuid>`."
+          }
+        }
+      },
+      "CreateSessionResponse": {
+        "type": "object",
+        "required": ["sessionId", "conversationToken", "livekitUrl", "roomName", "identity", "expiresAt"],
+        "properties": {
+          "sessionId": { "type": "string", "format": "uuid" },
+          "conversationToken": { "type": "string", "description": "LiveKit JWT for the browser to join the room." },
+          "livekitUrl": { "type": "string", "format": "uri" },
+          "roomName": { "type": "string", "example": "speko_..." },
+          "identity": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TranscribeResponse": {
+        "type": "object",
+        "required": ["text", "provider", "model", "failoverCount"],
+        "properties": {
+          "text": { "type": "string" },
+          "provider": { "type": "string", "description": "Provider that actually ran (post-failover)." },
+          "model": { "type": "string" },
+          "confidence": { "type": "number", "nullable": true, "minimum": 0, "maximum": 1 },
+          "failoverCount": { "type": "integer", "minimum": 0 },
+          "scoresRunId": { "type": "string", "nullable": true }
+        }
+      },
+      "SynthesizeRequest": {
+        "type": "object",
+        "required": ["text", "intent"],
+        "properties": {
+          "text": { "type": "string", "minLength": 1, "maxLength": 10000 },
+          "intent": { "$ref": "#/components/schemas/RoutingIntent" },
+          "voice": { "type": "string", "description": "Provider-specific voice id. Speko falls back to a sane default per provider when omitted." },
+          "speed": { "type": "number", "minimum": 0.5, "maximum": 2 },
+          "constraints": { "$ref": "#/components/schemas/PipelineConstraints" }
+        }
+      },
+      "CompleteRequest": {
+        "type": "object",
+        "required": ["messages", "intent"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/ChatMessage" }
+          },
+          "intent": { "$ref": "#/components/schemas/RoutingIntent" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "maxTokens": { "type": "integer", "minimum": 1 },
+          "systemPrompt": {
+            "type": "string",
+            "description": "Forwarded via the canonical system-prompt slot. Don't *also* prepend the same content as a `system` message."
+          },
+          "constraints": { "$ref": "#/components/schemas/PipelineConstraints" }
+        }
+      },
+      "CompleteResponse": {
+        "type": "object",
+        "required": ["text", "provider", "model", "usage", "failoverCount"],
+        "properties": {
+          "text": { "type": "string" },
+          "provider": { "type": "string" },
+          "model": { "type": "string" },
+          "usage": {
+            "type": "object",
+            "required": ["promptTokens", "completionTokens"],
+            "properties": {
+              "promptTokens": { "type": "integer", "minimum": 0 },
+              "completionTokens": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "failoverCount": { "type": "integer", "minimum": 0 },
+          "scoresRunId": { "type": "string", "nullable": true }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error", "code"],
+        "properties": {
+          "error": { "type": "string", "description": "Human-readable message." },
+          "code": { "type": "string", "description": "Machine-readable code." }
+        }
+      }
+    },
+    "headers": {
+      "RoutingHeaders": {
+        "X-Speko-Provider": {
+          "schema": { "type": "string" },
+          "description": "Provider that actually handled the request."
+        },
+        "X-Speko-Model": {
+          "schema": { "type": "string" },
+          "description": "Specific model used."
+        },
+        "X-Speko-Failover-Count": {
+          "schema": { "type": "integer" },
+          "description": "Number of providers tried before success."
+        },
+        "X-Speko-Scores-Run-Id": {
+          "schema": { "type": "string" },
+          "description": "Benchmark snapshot id used for routing."
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid bearer token.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Unauthorized", "code": "UNAUTHORIZED" }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request body or query parameters failed validation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Invalid request body", "code": "VALIDATION_ERROR" }
+          }
+        }
+      },
+      "InvalidAudio": {
+        "description": "Empty body, missing/invalid `x-speko-intent` header, or malformed `x-speko-constraints`.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Audio body is empty.", "code": "INVALID_AUDIO" }
+          }
+        }
+      },
+      "TranscribeFailed": {
+        "description": "No STT provider available for the intent, or every candidate failed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "All providers failed", "code": "TRANSCRIBE_FAILED" }
+          }
+        }
+      },
+      "SynthesizeFailed": {
+        "description": "No TTS provider available for the intent, no default voice for chosen provider, or every candidate failed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "All providers failed", "code": "SYNTHESIZE_FAILED" }
+          }
+        }
+      },
+      "CompleteFailed": {
+        "description": "No LLM provider available for the intent, or every candidate failed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "All providers failed", "code": "COMPLETE_FAILED" }
+          }
+        }
+      },
+      "SessionCreateFailed": {
+        "description": "Token mint failed, agent dispatch failed, or DB insert failed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Failed to dispatch voice agent", "code": "SESSION_CREATE_FAILED" }
+          }
+        }
+      }
+    }
+  }
+}
