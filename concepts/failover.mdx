@@ -1,0 +1,33 @@
+---
+title: 'Failover'
+description: 'How Speko transparently retries against runner-up providers when the primary fails.'
+---
+
+Every routing decision returns a primary `SelectedCandidate` plus an ordered `runnersUp` list — the next-best providers for the same intent. If the primary throws, Speko retries against the next candidate. From the caller's perspective: one request, one response. From the response: `failoverCount` tells you how many providers it tried before one succeeded.
+
+## What counts as a failure
+
+A candidate is considered failed if it:
+
+- Throws a network or 5xx error.
+- Returns no transcript / no audio / no completion text.
+- Errors mid-stream.
+
+Auth errors against BYOK keys also fail — Speko advances to the next candidate without retrying the current one.
+
+## What does not retry
+
+- **4xx caller errors** (bad audio, malformed request, missing intent header) — returned to the caller immediately. Failover doesn't help when the input is wrong.
+- **Auth errors against the Speko gateway itself** — your API key is invalid; that's not a routing problem.
+
+## All candidates exhausted
+
+If every candidate in the failover chain fails, Speko returns `ALL_PROVIDERS_FAILED` with a list of the underlying errors. This is rare in practice and usually signals a wide-scale outage or an over-restrictive `constraints.allowedProviders` list.
+
+## Observability
+
+- Response body: `failoverCount`, `provider`, `model`, `scoresRunId`.
+- Response headers: `X-Speko-Failover-Count`, `X-Speko-Provider`, `X-Speko-Model`, `X-Speko-Scores-Run-Id`.
+- Server logs: `[transcribe] failover deepgram/nova-2 → assemblyai/best: <error>`.
+
+If you see consistent non-zero `failoverCount` for a specific intent, check the dashboard provider grid — a BYOK key might be misconfigured, or a provider might be degraded for your region.

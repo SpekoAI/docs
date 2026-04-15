@@ -1,0 +1,48 @@
+---
+title: 'Sessions vs one-shot'
+description: 'When to mint a session and when to call a one-shot endpoint directly.'
+---
+
+Speko supports two integration shapes. Pick based on whether your call is real-time interactive or single-turn batch.
+
+## One-shot endpoints
+
+`POST /v1/transcribe`, `POST /v1/synthesize`, `POST /v1/complete`. Each is a single round-trip:
+
+- Caller sends input + intent.
+- Speko picks a provider, runs the call (with failover), returns the result.
+
+Use for:
+
+- Batch transcription of recorded audio.
+- Server-side TTS for notifications, IVR prompts, exports.
+- LLM completions in a non-voice flow.
+
+No state is held between calls. There is nothing to clean up.
+
+## Voice sessions
+
+`POST /v1/sessions`. Returns a `conversationToken` (LiveKit JWT) plus a room name. The browser uses [`@spekoai/client`](/client/overview) to join the room; Speko dispatches an agent worker into the same room to run the STT → LLM → TTS pipeline in real time over WebRTC.
+
+Use for:
+
+- Live voice conversations between an end-user and an agent.
+- Anything that needs barge-in, partial transcripts, or sub-second latency.
+
+The session has a TTL (`ttlSeconds`, default 900s, max 86400s). The agent worker leaves when the room empties or the token expires. The `voiceSession` row is retained for usage and audit.
+
+## Choosing
+
+| Need | Use |
+| --- | --- |
+| Transcribe a file, return text | `/v1/transcribe` |
+| Generate audio for a notification | `/v1/synthesize` |
+| Single LLM reply, no voice | `/v1/complete` |
+| Real-time voice agent in a browser | `/v1/sessions` + `@spekoai/client` |
+| Real-time voice in a custom LiveKit worker | `@spekoai/adapter-livekit` directly |
+
+## What sessions don't do
+
+- They aren't a chat history store. The dispatched agent's `systemPrompt` and per-turn context live in your worker.
+- They don't proxy audio. Speko is in the *control* path (mint token, dispatch worker). Audio flows browser ↔ LiveKit ↔ worker.
+- They don't bill differently from one-shot calls. Usage is recorded per underlying STT/LLM/TTS call.

@@ -1,0 +1,83 @@
+---
+title: 'sessions'
+description: 'Create, fetch, and end voice sessions.'
+---
+
+```python
+speko.sessions.create(pipeline, metadata=None) -> Session
+speko.sessions.get(session_id) -> SessionDetail
+speko.sessions.end(session_id) -> dict[str, str]
+```
+
+## create
+
+```python
+from spekoai import SpekoAI, PipelineConfig, SttConfig, LlmConfig, TtsConfig
+
+speko = SpekoAI(api_key="sk_live_...")
+
+session = speko.sessions.create(
+    pipeline=PipelineConfig(
+        stt=SttConfig(),                           # provider="deepgram" by default
+        llm=LlmConfig(model="gpt-4o"),
+        tts=TtsConfig(provider="elevenlabs", voice="rachel"),
+    ),
+    metadata={"user_id": "u_123"},
+)
+
+session.id          # "..."
+session.token       # LiveKit JWT — pass to @spekoai/client
+session.livekit_url # WSS URL for the room
+session.room_name   # "speko_..."
+session.status      # "created"
+```
+
+## get
+
+```python
+detail = speko.sessions.get(session.id)
+detail.pipeline_config  # PipelineConfig
+detail.metadata         # dict
+detail.status           # "created" | "connecting" | "active" | "ended" | "failed"
+detail.created_at       # datetime
+```
+
+## end
+
+```python
+speko.sessions.end(session.id)
+```
+
+Idempotent — calling on an already-ended session is a no-op.
+
+## Async equivalents
+
+`AsyncSpekoAI.sessions.create / .get / .end` mirror the sync API; await each call.
+
+## PipelineConfig
+
+```python
+PipelineConfig(
+    stt=SttConfig(
+        provider="deepgram",       # only deepgram for now
+        model=None,                # optional override
+        language=None,
+        keywords=None,
+    ),
+    llm=LlmConfig(
+        provider="openai",
+        model="gpt-4o",
+        system_prompt=None,
+        temperature=None,
+        max_tokens=None,
+    ),
+    tts=TtsConfig(
+        provider="elevenlabs",     # or "cartesia"
+        voice="rachel",
+        model=None,
+        speed=None,
+    ),
+)
+```
+
+The Python SDK currently uses an explicit `provider/model` pipeline config rather than the routing-intent shape used by the TS SDK. Routing-intent support is on the roadmap.

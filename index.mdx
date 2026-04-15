@@ -1,97 +1,54 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: 'Speko'
+description: 'One API for every voice provider. Speko benchmarks STT, LLM, and TTS in real time and routes each call to the best provider for your language, vertical, and latency/cost target.'
 ---
 
-## Setting up
+Speko is a voice gateway. You ship one integration; we route each request to the highest-scoring provider for your `(language, vertical, optimizeFor)` intent. Failover is server-side. Providers rotate without a code change.
 
-Get your documentation site up and running in minutes.
+## Three ways to integrate
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={3}>
+  <Card title="One-shot HTTP" icon="terminal" href="/guides/one-shot">
+    Call `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` directly. Best for batch jobs and server pipelines.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Real-time voice agent" icon="microphone" href="/guides/voice-agent">
+    LiveKit-based agent worker. Browser ↔ agent ↔ Speko. STT/LLM/TTS pipeline runs in your worker.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Browser conversation" icon="browser" href="/guides/realtime-conversation">
+    `@spekoai/client` joins a Speko session over WebRTC. Mic in, agent voice out, transcripts on the data channel.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Start here
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Sign up, mint an API key, make your first transcribe call.
+  </Card>
+  <Card title="How routing works" icon="route" href="/concepts/routing">
+    Intent, scoring, failover. The model behind every Speko call.
+  </Card>
+  <Card title="Bring your own keys" icon="key" href="/concepts/byok">
+    Use your own provider credentials. Speko routes; you pay providers directly.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/introduction">
+    Every `/v1/*` endpoint, request/response shape, headers.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## SDKs
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="@spekoai/sdk" icon="js" href="/sdk/overview">
+    TypeScript HTTP client. Node + browser.
+  </Card>
+  <Card title="@spekoai/client" icon="globe" href="/client/overview">
+    Browser SDK for real-time voice over WebRTC.
+  </Card>
+  <Card title="@spekoai/adapter-livekit" icon="plug" href="/adapter-livekit/overview">
+    Drop-in STT/LLM/TTS for LiveKit agent workers.
+  </Card>
+  <Card title="spekoai (Python)" icon="python" href="/sdk-python/overview">
+    Async Python client. Same API as the TS SDK.
+  </Card>
+</CardGroup>

@@ -1,0 +1,58 @@
+---
+title: 'Synthesize'
+description: 'POST /v1/synthesize — text to speech with routing + failover.'
+---
+
+## POST /v1/synthesize
+
+Text-to-speech. Returns binary audio. Format depends on the provider that handled the call (`X-Speko-Audio-Format` header tells you).
+
+### Request
+
+```http
+POST /v1/synthesize
+Authorization: Bearer sk_live_...
+Content-Type: application/json
+```
+
+```json
+{
+  "text": "Hello, world.",
+  "intent": { "language": "en-US", "vertical": "general", "optimizeFor": "balanced" },
+  "voice": "rachel",
+  "speed": 1.0,
+  "constraints": { "allowedProviders": { "tts": ["cartesia"] } }
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `text` | string | yes | 1–10000 chars. |
+| `intent` | object | yes | Same shape as transcribe. |
+| `voice` | string | no | Provider-specific voice id. Speko falls back to a sane default per provider. |
+| `speed` | number | no | `0.5..2`. |
+| `constraints` | object | no | Same shape as transcribe. |
+
+### Response (`200 OK`)
+
+Body: binary audio. Common Content-Types:
+
+- `audio/pcm;rate=24000` — Cartesia
+- `audio/mpeg` — ElevenLabs
+
+Headers:
+
+- `Content-Type` (audio MIME)
+- `Content-Length`
+- `X-Speko-Provider`
+- `X-Speko-Model`
+- `X-Speko-Audio-Format` (mirrors `Content-Type`)
+- `X-Speko-Failover-Count`
+- `X-Speko-Scores-Run-Id`
+
+### Errors
+
+| HTTP | Code | When |
+| --- | --- | --- |
+| `400` | `VALIDATION_ERROR` | Body fails Zod validation. |
+| `5xx` | `SYNTHESIZE_FAILED` | No TTS provider for intent, no default voice for chosen provider, or every candidate failed. |

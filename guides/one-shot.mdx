@@ -1,0 +1,107 @@
+---
+title: 'One-shot APIs'
+description: 'POST /v1/transcribe, /v1/synthesize, /v1/complete — single-turn calls without sessions.'
+---
+
+For batch transcription, server-side TTS, and non-voice LLM completions you don't need a real-time session — just call the one-shot endpoints directly. Each is a single round-trip with built-in routing and failover.
+
+## Auth
+
+Every one-shot call needs a bearer API key. Mint one in **Settings → API keys** in the dashboard.
+
+```http
+Authorization: Bearer sk_live_...
+```
+
+## Transcribe
+
+```bash
+curl -X POST https://api.speko.dev/v1/transcribe \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  -H "Content-Type: audio/wav" \
+  -H "x-speko-intent: {\"language\":\"en-US\",\"vertical\":\"general\"}" \
+  --data-binary @call.wav
+```
+
+Response:
+
+```json
+{
+  "text": "...",
+  "provider": "deepgram",
+  "model": "nova-2",
+  "confidence": 0.94,
+  "failoverCount": 0,
+  "scoresRunId": "..."
+}
+```
+
+Notes:
+
+- Audio body is binary. Wrap PCM/MP3/WAV/etc. in the request body — no base64.
+- Intent goes in the `x-speko-intent` header (JSON), not the body. Constraints in `x-speko-constraints`.
+
+## Synthesize
+
+```bash
+curl -X POST https://api.speko.dev/v1/synthesize \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, world.",
+    "intent": { "language": "en-US", "vertical": "general" },
+    "voice": null,
+    "speed": 1
+  }' \
+  --output speech.bin
+```
+
+Response body is the audio. Content-Type indicates the format (e.g. `audio/pcm;rate=24000` for Cartesia, `audio/mpeg` for ElevenLabs). Routing headers (`X-Speko-Provider`, etc.) tell you which provider ran.
+
+## Complete
+
+```bash
+curl -X POST https://api.speko.dev/v1/complete \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      { "role": "system", "content": "You are concise." },
+      { "role": "user", "content": "Hi!" }
+    ],
+    "intent": { "language": "en", "vertical": "general" }
+  }'
+```
+
+Response:
+
+```json
+{
+  "text": "Hello!",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "usage": { "promptTokens": 14, "completionTokens": 4 },
+  "failoverCount": 0,
+  "scoresRunId": "..."
+}
+```
+
+## With the SDK
+
+The TypeScript SDK wraps all three with the same shape. See [`@spekoai/sdk`](/sdk/overview).
+
+```ts
+import { Speko } from '@spekoai/sdk';
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
+
+const t = await speko.transcribe(buf, { language: 'en-US', vertical: 'general' });
+const a = await speko.synthesize('Hello', { language: 'en', vertical: 'general' });
+const c = await speko.complete({
+  messages: [{ role: 'user', content: 'Hi!' }],
+  intent: { language: 'en', vertical: 'general' },
+});
+```
+
+## When not to use one-shot
+
+If you need real-time voice with sub-second latency, barge-in, and partial transcripts — use [sessions](/concepts/sessions) and the LiveKit-based stack instead. One-shot endpoints are for batch and server-internal flows.

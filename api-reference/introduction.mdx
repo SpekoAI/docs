@@ -1,33 +1,88 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: 'API reference'
+description: 'REST API for the Speko voice gateway — sessions, one-shot transcribe/synthesize/complete, BYOK, usage.'
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+The Speko REST API is hosted at `https://api.speko.dev`. All endpoints are under `/v1/`. Requests and responses are JSON unless noted (transcribe accepts binary audio; synthesize returns binary audio).
 
-## Welcome
+## Base URL
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
-
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+```
+https://api.speko.dev
+```
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+Every endpoint requires a bearer API key in the `Authorization` header:
+
+```http
+Authorization: Bearer sk_live_...
+```
+
+Mint a key in the dashboard under **Settings → API keys** or via [`POST /v1/api-keys`](/api-reference/api-keys).
+
+The OAuth-based session token issued by `POST /v1/sessions` is **not** an API key — it's scoped to a single LiveKit room and is used by the browser SDK, not for general REST calls.
+
+## Errors
+
+Errors return `application/json`:
 
 ```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+{
+  "error": "human-readable message",
+  "code": "MACHINE_READABLE_CODE"
+}
 ```
+
+Common codes:
+
+| HTTP | Code | Meaning |
+| --- | --- | --- |
+| `400` | `INVALID_AUDIO`, `INVALID_INTENT`, `VALIDATION_ERROR` | Malformed request. |
+| `401` | `UNAUTHORIZED` | Missing or invalid API key. |
+| `429` | `RATE_LIMITED` | Backoff, then retry; respect `Retry-After`. |
+| `5xx` | `TRANSCRIBE_FAILED`, `SYNTHESIZE_FAILED`, `COMPLETE_FAILED`, `ALL_PROVIDERS_FAILED`, `SESSION_CREATE_FAILED` | Upstream / routing failure. |
+
+## Routing headers
+
+`/v1/transcribe`, `/v1/synthesize`, `/v1/complete` all return:
+
+- `X-Speko-Provider` — provider that handled the call
+- `X-Speko-Model` — specific model
+- `X-Speko-Failover-Count` — number of providers tried before success
+- `X-Speko-Scores-Run-Id` — benchmark snapshot id used for routing
+- `/v1/synthesize` additionally: `X-Speko-Audio-Format`
+
+Log these in production. They're how you correlate behavior with routing decisions.
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Sessions" icon="microphone" href="/api-reference/sessions">
+    Create real-time voice sessions.
+  </Card>
+  <Card title="Transcribe" icon="ear-listen" href="/api-reference/transcribe">
+    Speech to text with routing + failover.
+  </Card>
+  <Card title="Synthesize" icon="waveform" href="/api-reference/synthesize">
+    Text to speech with routing + failover.
+  </Card>
+  <Card title="Complete" icon="comments" href="/api-reference/complete">
+    LLM completion with routing + failover.
+  </Card>
+  <Card title="API keys" icon="key" href="/api-reference/api-keys">
+    Mint, list, revoke keys.
+  </Card>
+  <Card title="Providers (BYOK)" icon="plug" href="/api-reference/providers">
+    Manage per-provider API keys.
+  </Card>
+  <Card title="Usage" icon="chart-line" href="/api-reference/usage">
+    Per-provider, per-metric usage.
+  </Card>
+  <Card title="Routing" icon="route" href="/api-reference/routing">
+    Preview the router's pick for an intent.
+  </Card>
+  <Card title="Organization" icon="building" href="/api-reference/organization">
+    Current organization info.
+  </Card>
+</CardGroup>

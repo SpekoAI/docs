@@ -1,80 +1,83 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quickstart'
+description: 'From sign-up to your first transcribe call in under five minutes.'
 ---
 
-## Get started in three steps
+## 1. Create an account and an API key
 
-Get your documentation site running locally and make your first customization.
+Sign up at [speko.dev](https://speko.dev). Open **Settings → API keys** and click **Create key**. Copy the raw value — it is shown once and starts with `sk_live_`.
 
-### Step 1: Set up your local environment
+```bash
+export SPEKO_API_KEY=sk_live_xxx
+```
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## 2. Configure providers (optional)
 
-### Step 2: Deploy your changes
+Speko uses platform-managed provider credentials by default. To bring your own keys (BYOK), open **Settings → Providers** in the dashboard and paste each provider's API key. Speko still picks the best provider per call; your keys are billed by the provider directly. See [BYOK](/concepts/byok).
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## 3. Make your first call
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.speko.dev/v1/transcribe \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  -H "Content-Type: audio/wav" \
+  -H "x-speko-intent: {\"language\":\"en-US\",\"vertical\":\"general\"}" \
+  --data-binary @call.wav
+```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+```ts TypeScript
+import { Speko } from '@spekoai/sdk';
+import { readFile } from 'node:fs/promises';
 
-### Step 3: Go live
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
+const audio = await readFile('./call.wav');
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+const { text, provider, model, confidence } = await speko.transcribe(audio, {
+  language: 'en-US',
+  vertical: 'general',
+});
 
-## Next steps
+console.log(text, '←', provider, model, confidence);
+```
 
-Now that you have your docs running, explore these key features:
+```py Python
+# The Python SDK currently focuses on session + usage management.
+# For one-shot transcribe, call the HTTP endpoint directly:
+import os, httpx, json
+
+with open("call.wav", "rb") as f:
+    audio = f.read()
+
+resp = httpx.post(
+    "https://api.speko.dev/v1/transcribe",
+    headers={
+        "Authorization": f"Bearer {os.environ['SPEKO_API_KEY']}",
+        "Content-Type": "audio/wav",
+        "x-speko-intent": json.dumps({"language": "en-US", "vertical": "general"}),
+    },
+    content=audio,
+).json()
+
+print(resp["text"], "←", resp["provider"], resp["model"])
+```
+</CodeGroup>
+
+The response includes `provider`, `model`, `confidence`, and `failoverCount` so you can see what actually ran. Routing headers are also returned: `X-Speko-Provider`, `X-Speko-Model`, `X-Speko-Failover-Count`, `X-Speko-Scores-Run-Id`.
+
+## 4. Pick your next path
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Build a voice agent" icon="microphone" href="/guides/voice-agent">
+    Real-time STT → LLM → TTS pipeline with LiveKit.
+  </Card>
+  <Card title="Add voice to a browser app" icon="browser" href="/guides/realtime-conversation">
+    `@spekoai/client` over WebRTC.
+  </Card>
+  <Card title="Use the one-shot APIs" icon="terminal" href="/guides/one-shot">
+    `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` for batch and server flows.
+  </Card>
+  <Card title="How routing decides" icon="route" href="/concepts/routing">
+    Intent, scoring, failover, constraints.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

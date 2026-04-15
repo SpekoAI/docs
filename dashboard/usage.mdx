@@ -1,0 +1,28 @@
+---
+title: 'Usage'
+description: 'Per-provider, per-metric usage broken down by date range.'
+---
+
+The Usage page shows what your organization actually consumed, grouped by provider and metric.
+
+## Metrics
+
+| Metric | Recorded for | Unit |
+| --- | --- | --- |
+| `stt_seconds` | every `/v1/transcribe` call | seconds of audio |
+| `tts_characters` | every `/v1/synthesize` call | characters of input text |
+| `llm_tokens` | every `/v1/complete` call | prompt + completion tokens |
+
+Each row is keyed by the provider that *actually ran* — the failover-resolved provider, not the original top pick. So if your top STT pick is failing over to a runner-up, you'll see the runner-up accumulating `stt_seconds`.
+
+## Date range
+
+The picker defaults to the current billing period. Pick any range; the breakdown updates.
+
+## Cost
+
+Cost rollup is in progress (the column shows `0` until cost data lands per provider). Until then, `quantity` × your provider rate card is the source of truth. With BYOK, the provider invoices you directly.
+
+## Programmatic
+
+Same data via [`GET /v1/usage`](/api-reference/usage). Use it for dashboards, alerts, or to feed your own billing.

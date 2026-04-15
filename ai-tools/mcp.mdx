@@ -1,0 +1,58 @@
+---
+title: 'spekoai-mcp'
+description: 'Model Context Protocol server exposing Speko tools to Claude, Cursor, and other MCP clients.'
+---
+
+`spekoai-mcp` is a [FastMCP](https://gofastmcp.com)-based MCP server that lets MCP-aware clients call Speko on behalf of the authenticated user. Each tool call forwards the caller's OAuth access token to the Speko API — there is no shared server-wide credential.
+
+## Install
+
+```bash
+pip install spekoai-mcp
+# or
+uv tool install spekoai-mcp
+```
+
+Python 3.10+.
+
+## Run
+
+```bash
+spekoai-mcp
+```
+
+The server speaks MCP over stdio by default. Configure your MCP client to launch it.
+
+## Configure Claude Desktop
+
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "spekoai": {
+      "command": "spekoai-mcp"
+    }
+  }
+}
+```
+
+Restart Claude. The Speko tools appear in the tool picker.
+
+## Configure Cursor
+
+In Cursor settings, add an MCP server entry pointing at the `spekoai-mcp` binary. Tool calls are routed through Cursor's MCP transport.
+
+## Available tools
+
+The MCP tool surface mirrors the Python SDK exactly. v1 ships:
+
+- `get_usage_summary(from_date?, to_date?)` — returns `UsageSummary` for the requested range.
+
+More tools land as the SDK grows. The MCP server intentionally never exposes a tool the SDK doesn't already expose — keeps the contract honest.
+
+## Auth
+
+The server requires OAuth. On startup it expects an `OAuthProxy` configuration; callers authenticate via the standard MCP OAuth handshake. The resulting access token is the same one you'd use as `Authorization: Bearer <token>` against the Speko REST API directly.
+
+For local-only use without OAuth, set `SPEKOAI_BASE_URL` to a local Speko instance and run with auth disabled per FastMCP docs.

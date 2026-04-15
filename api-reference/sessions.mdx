@@ -1,0 +1,77 @@
+---
+title: 'Sessions'
+description: 'POST /v1/sessions — mint a real-time voice session.'
+---
+
+## POST /v1/sessions
+
+Create a voice session. Speko mints a LiveKit access token, persists the pipeline config, and dispatches an agent worker into the room. Returns the token + room name + identity for the browser to join.
+
+### Request
+
+```http
+POST /v1/sessions
+Authorization: Bearer sk_live_...
+Content-Type: application/json
+```
+
+```json
+{
+  "intent": {
+    "language": "en-US",
+    "vertical": "general",
+    "optimizeFor": "balanced"
+  },
+  "constraints": {
+    "allowedProviders": {
+      "stt": ["deepgram"],
+      "tts": ["cartesia"]
+    }
+  },
+  "voice": "...",
+  "systemPrompt": "You are a helpful voice assistant.",
+  "llm": { "temperature": 0.7, "maxTokens": 256 },
+  "ttsOptions": { "sampleRate": 24000, "speed": 1 },
+  "metadata": { "userId": "u_123" },
+  "ttlSeconds": 900,
+  "identity": "user_..."
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `intent.language` | string | yes | BCP-47 (`en`, `es-MX`, …). |
+| `intent.vertical` | enum | yes | `general` \| `healthcare` \| `finance` \| `legal`. |
+| `intent.optimizeFor` | enum | no | `balanced` (default) \| `accuracy` \| `latency` \| `cost`. |
+| `constraints.allowedProviders.{stt,llm,tts}` | string[] | no | Restrict candidates per modality. |
+| `voice` | string | no | Force a specific TTS voice id. |
+| `systemPrompt` | string | no | Initial agent instructions. |
+| `llm.temperature` | number | no | `0..2`. |
+| `llm.maxTokens` | int | no | |
+| `ttsOptions.sampleRate` | int | no | |
+| `ttsOptions.speed` | number | no | `>0`. |
+| `metadata` | object | no | Arbitrary; stored on the session row. |
+| `ttlSeconds` | int | no | Token TTL. Default `900`, max `86400`. |
+| `identity` | string | no | LiveKit identity for the participant. Default `user_<uuid>`. |
+
+### Response (`201 Created`)
+
+```json
+{
+  "sessionId": "...",
+  "conversationToken": "<JWT>",
+  "livekitUrl": "wss://...",
+  "roomName": "speko_...",
+  "identity": "user_...",
+  "expiresAt": "2026-04-15T12:34:56.000Z"
+}
+```
+
+Pass `conversationToken` and `livekitUrl` to [`@spekoai/client`](/client/overview) for the browser to join.
+
+### Errors
+
+| Code | When |
+| --- | --- |
+| `SESSION_CREATE_FAILED` | Token mint failed, dispatch failed, or DB insert failed. |
+| `VALIDATION_ERROR` | Invalid request body. |

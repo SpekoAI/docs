@@ -1,0 +1,32 @@
+---
+title: 'Benchmarks and scoring'
+description: 'How provider scores are computed and refreshed.'
+---
+
+Provider rankings come from a continuously-running benchmark suite. Each provider/model is scored per `(language, vertical)` on three axes:
+
+- **Accuracy** — STT word error rate, LLM eval pass rate, TTS naturalness.
+- **Latency** — p50 / p95 round-trip time from a representative location.
+- **Cost** — per-second / per-token / per-character price.
+
+A weighted score per `optimizeFor` preset combines the three axes. See [routing](/concepts/routing) for the weights.
+
+## Refresh cadence
+
+Benchmarks rerun on a schedule and on every benchmark suite update. The active snapshot is identified by `scoresRunId`, returned with every routing decision. Two calls with identical intent within the same snapshot will route the same way; across snapshots, a re-ranking can move a different provider into the top spot.
+
+## Health gating
+
+Providers with a recent error rate above 50% are dropped from candidate selection regardless of score. They re-enter once their error rate recovers.
+
+## Why benchmarks beat a single eval
+
+Production traffic is heterogeneous: Spanish healthcare dictation has different leaders than English casual chat. A static "best STT" decision under-serves anything outside the benchmarked happy path. Speko's routing layer means you get the leader *per call*, not per integration choice.
+
+## Inspecting scores
+
+`GET /v1/routing/preview?language=en-US&vertical=healthcare&optimize_for=accuracy` returns the same `SelectedCandidate` shape the router would use, including `runnersUp[].score`. Use it to debug "why did Speko pick X for this intent?".
+
+## Custom benchmarks
+
+Not in v1. The vertical taxonomy is fixed (`general`, `healthcare`, `finance`, `legal`). Reach out if your traffic doesn't fit.

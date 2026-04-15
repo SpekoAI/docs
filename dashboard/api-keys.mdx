@@ -1,0 +1,39 @@
+---
+title: 'API keys'
+description: 'Mint, list, and revoke organization API keys.'
+---
+
+API keys authenticate every `/v1/*` request. They're scoped to your organization and look like `sk_live_<48 hex chars>`.
+
+## Create
+
+**Settings → API keys → Create key**. Provide a memorable name (e.g. `prod-server`, `dev-laptop`). The raw key is shown **once** at creation time. Copy it into your secret manager immediately.
+
+## Use
+
+```http
+Authorization: Bearer sk_live_...
+```
+
+Every endpoint (transcribe, synthesize, complete, sessions, etc.) accepts a key. Sessions you mint will inherit your organization context.
+
+## Inspect
+
+The list view shows each key's name, prefix (e.g. `sk_live_abc1234...`), creation timestamp, and last-used timestamp. The full key is never recoverable after creation.
+
+## Revoke
+
+Click **Revoke** on the row. Revocation is immediate — in-flight calls are unaffected, but any subsequent call with that key fails with `401`. Revoked keys remain in the list (greyed) so you can audit when they were active.
+
+## Rotation
+
+There's no built-in rotation grace period. To rotate:
+
+1. Create a new key.
+2. Roll your environment / secret store to the new key.
+3. Verify traffic from the old key has stopped (look at `lastUsedAt`).
+4. Revoke the old key.
+
+## Programmatic management
+
+See [`/v1/api-keys`](/api-reference/api-keys) — list, create, revoke via the REST API.

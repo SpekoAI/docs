@@ -1,0 +1,78 @@
+---
+title: 'How routing works'
+description: 'Intent + benchmark scores → ranked candidates → live failover. The model behind every Speko call.'
+---
+
+Speko continuously benchmarks every supported STT, LLM, and TTS provider across language, vertical, and three performance axes (accuracy, latency, cost). Every API call carries a `RoutingIntent`. The router scores candidates against that intent, picks the top-ranked provider, and falls back through runners-up if the primary fails.
+
+## Intent
+
+```ts
+type RoutingIntent = {
+  language: string;          // BCP-47, e.g. "en-US", "es-MX"
+  vertical: 'general' | 'healthcare' | 'finance' | 'legal';
+  optimizeFor?: 'balanced' | 'accuracy' | 'latency' | 'cost'; // default: balanced
+};
+```
+
+`language` is required. `vertical` selects the benchmark slice. `optimizeFor` chooses a weight preset:
+
+| Preset | Accuracy | Latency | Cost |
+| --- | --- | --- | --- |
+| `balanced` (default) | 0.5 | 0.3 | 0.2 |
+| `accuracy` | 0.8 | 0.15 | 0.05 |
+| `latency` | 0.2 | 0.7 | 0.1 |
+| `cost` | 0.15 | 0.15 | 0.7 |
+
+## Selection
+
+For each modality (STT / LLM / TTS) the selector:
+
+1. Filters the benchmark set to providers with data for `(language, vertical)`.
+2. Drops any provider whose recent error rate exceeds 50 %.
+3. Computes a weighted score per candidate using the chosen preset.
+4. Returns a `SelectedCandidate` (`providerId`, `modelId`, `score`) plus an ordered `runnersUp` list.
+
+Each call also returns a `scoresRunId` — the benchmark snapshot the decision was based on. Useful for audit and bug repro.
+
+## Failover
+
+The runners-up are not fallbacks of last resort — they are the next-best provider for your exact intent. If the primary throws, Speko transparently retries the same request against the next candidate. The response includes `failoverCount` (how many providers it tried before one succeeded) and `provider` / `model` (what actually ran).
+
+If every candidate fails, the call returns `ALL_PROVIDERS_FAILED`.
+
+## Constraints
+
+Pin or restrict the candidate pool per modality:
+
+```json
+{
+  "constraints": {
+    "allowedProviders": {
+      "stt": ["deepgram"],
+      "tts": ["cartesia"]
+    }
+  }
+}
+```
+
+Speko still ranks by score — it just picks the highest-ranking candidate that's in your allow-list. Use this to:
+
+- Pin a provider while debugging.
+- Honor compliance constraints (data residency, BAA coverage).
+- Cap costs by excluding premium providers.
+
+## Preview before you ship
+
+Hit `GET /v1/routing/preview?language=en-US&vertical=healthcare&optimize_for=accuracy` to see what the router would pick, including runners-up and `scoresRunId`. No usage is recorded.
+
+## Headers on every response
+
+Every `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` response carries:
+
+- `X-Speko-Provider` — provider that handled the request
+- `X-Speko-Model` — specific model
+- `X-Speko-Failover-Count` — how many providers we tried
+- `X-Speko-Scores-Run-Id` — benchmark snapshot id
+
+Log these. They're how you correlate prod behavior with the routing decision.

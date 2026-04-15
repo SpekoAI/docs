@@ -17,41 +17,50 @@
             "group": "Getting started",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/routing",
+              "concepts/verticals",
+              "concepts/byok",
+              "concepts/failover",
+              "concepts/scoring",
+              "concepts/sessions"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Build",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/voice-agent",
+              "guides/realtime-conversation",
+              "guides/one-shot"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/byok",
+              "dashboard/api-keys",
+              "dashboard/usage",
+              "dashboard/team"
             ]
           },
           {
             "group": "AI tools",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "ai-tools/mcp"
             ]
           }
         ]
       },
       {
-        "tab": "SDKs",
+        "tab": "SDK Reference",
         "groups": [
           {
-            "group": "@spekoai/sdk",
+            "group": "@spekoai/sdk (TypeScript)",
             "pages": [
               "sdk/overview",
               "sdk/speko-client",
@@ -64,7 +73,7 @@
             ]
           },
           {
-            "group": "@spekoai/client",
+            "group": "@spekoai/client (Browser)",
             "pages": [
               "client/overview",
               "client/voice-conversation",
@@ -84,25 +93,44 @@
               "adapter-livekit/intent",
               "adapter-livekit/audio"
             ]
+          },
+          {
+            "group": "spekoai (Python)",
+            "pages": [
+              "sdk-python/overview",
+              "sdk-python/sessions",
+              "sdk-python/usage",
+              "sdk-python/errors"
+            ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
               "api-reference/introduction"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Voice",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api-reference/sessions",
+              "api-reference/transcribe",
+              "api-reference/synthesize",
+              "api-reference/complete"
+            ]
+          },
+          {
+            "group": "Account",
+            "pages": [
+              "api-reference/api-keys",
+              "api-reference/providers",
+              "api-reference/usage",
+              "api-reference/routing",
+              "api-reference/organization"
             ]
           }
         ]

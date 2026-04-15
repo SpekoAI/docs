@@ -1,0 +1,66 @@
+---
+title: 'spekoai (Python)'
+description: 'Async + sync Python SDK for the Speko voice gateway.'
+---
+
+`spekoai` is the official Python SDK. It currently focuses on **session and usage management** — minting voice sessions and querying usage. For one-shot transcribe / synthesize / complete from Python, call the HTTP endpoints directly with `httpx` until those resources land in the SDK.
+
+## Install
+
+```bash
+pip install spekoai
+# or
+uv add spekoai
+```
+
+Python 3.9+. Depends on `httpx` and `pydantic`.
+
+## Sync usage
+
+```python
+from spekoai import SpekoAI, PipelineConfig, SttConfig, LlmConfig, TtsConfig
+
+with SpekoAI(api_key="sk_live_...") as speko:
+    session = speko.sessions.create(
+        pipeline=PipelineConfig(
+            stt=SttConfig(),
+            llm=LlmConfig(model="gpt-4o"),
+            tts=TtsConfig(provider="elevenlabs", voice="rachel"),
+        ),
+    )
+    print(session.token, session.livekit_url)
+```
+
+## Async usage
+
+```python
+import asyncio
+from spekoai import AsyncSpekoAI, PipelineConfig, SttConfig, LlmConfig, TtsConfig
+
+async def main():
+    async with AsyncSpekoAI(api_key="sk_live_...") as speko:
+        session = await speko.sessions.create(
+            pipeline=PipelineConfig(
+                stt=SttConfig(),
+                llm=LlmConfig(model="gpt-4o"),
+                tts=TtsConfig(provider="elevenlabs", voice="rachel"),
+            ),
+        )
+        print(session.token)
+
+asyncio.run(main())
+```
+
+## Resources
+
+- [`sessions`](/sdk-python/sessions) — create / get / end voice sessions.
+- [`usage`](/sdk-python/usage) — query usage summary.
+- [Errors](/sdk-python/errors) — `SpekoApiError`, `SpekoAuthError`, `SpekoRateLimitError`.
+
+## Configuration
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `api_key` | (required) | Your `sk_live_...` key. |
+| `base_url` | `https://api.speko.ai` | Override for self-hosted or staging. |
+| `timeout` | `30.0` | Per-request timeout in seconds. |

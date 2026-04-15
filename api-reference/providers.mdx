@@ -1,0 +1,88 @@
+---
+title: 'Providers (BYOK)'
+description: 'List, set, and remove per-provider API keys for your organization.'
+---
+
+## GET /v1/providers
+
+List every provider in the catalog with its config status for your organization.
+
+### Response (`200 OK`)
+
+```json
+[
+  {
+    "key": "deepgram",
+    "name": "Deepgram",
+    "type": "stt",
+    "configured": true,
+    "source": "BYOK",
+    "updatedAt": "2026-04-10T08:00:00.000Z"
+  },
+  {
+    "key": "cartesia",
+    "name": "Cartesia",
+    "type": "tts",
+    "configured": false,
+    "source": null,
+    "updatedAt": null
+  }
+]
+```
+
+| Field | Notes |
+| --- | --- |
+| `type` | `stt` \| `llm` \| `tts`. |
+| `configured` | `true` if BYOK key is set. Platform-managed credentials still apply when `false`, where available. |
+| `source` | `"BYOK"` or `null`. |
+
+---
+
+## PUT /v1/providers
+
+Set a provider API key. Encrypts at rest.
+
+### Request
+
+```json
+{ "provider": "deepgram", "apiKey": "..." }
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `provider` | enum | yes | `deepgram` \| `assemblyai` \| `openai` \| `elevenlabs` \| `cartesia`. |
+| `apiKey` | string | yes | Min 1 char. |
+
+### Response (`200 OK`)
+
+```json
+{ "provider": "deepgram", "configured": true }
+```
+
+---
+
+## DELETE /v1/providers/:provider
+
+Remove a provider key. Routing falls back to platform-managed credentials for that provider, if any.
+
+### Response (`200 OK`)
+
+```json
+{ "provider": "deepgram", "configured": false }
+```
+
+---
+
+## GET /v1/providers/known
+
+List provider IDs the router has benchmark data for, grouped by request type. Used by the dashboard playground to populate allow-list selectors.
+
+### Response (`200 OK`)
+
+```json
+{
+  "stt": ["assemblyai", "deepgram"],
+  "llm": ["openai"],
+  "tts": ["cartesia", "elevenlabs"]
+}
+```

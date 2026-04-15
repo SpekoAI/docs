@@ -1,0 +1,138 @@
+---
+title: 'Real-time browser conversation'
+description: 'Wire @spekoai/client into a web app — mint a session, join the room, stream voice both ways.'
+---
+
+`@spekoai/client` connects a browser tab to a Speko voice session over LiveKit WebRTC. You mint a session on your server (`POST /v1/sessions`); the browser uses the returned token to join the LiveKit room and exchange audio + structured events with the agent worker.
+
+## Install
+
+```bash
+npm install @spekoai/client livekit-client
+```
+
+## 1. Mint a session on your server
+
+```ts server.ts
+import { Speko } from '@spekoai/sdk';
+
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
+
+app.post('/api/conversations', async (req, res) => {
+  const session = await fetch('https://api.speko.dev/v1/sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.SPEKO_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      intent: { language: 'en-US', vertical: 'general' },
+      systemPrompt: 'You are a helpful voice assistant.',
+      voice: undefined,                  // let routing pick
+      ttlSeconds: 900,                   // default
+    }),
+  }).then((r) => r.json());
+
+  res.json({
+    conversationToken: session.conversationToken,
+    livekitUrl: session.livekitUrl,
+  });
+});
+```
+
+Never expose your `SPEKO_API_KEY` to the browser. The session token is short-lived and scoped to one room.
+
+## 2. Join from the browser
+
+```tsx VoicePanel.tsx
+import { useEffect, useRef, useState } from 'react';
+import { VoiceConversation } from '@spekoai/client';
+
+export function VoicePanel() {
+  const convRef = useRef<VoiceConversation | null>(null);
+  const [status, setStatus] = useState('idle');
+  const [transcript, setTranscript] = useState<string[]>([]);
+
+  async function start() {
+    const { conversationToken, livekitUrl } = await fetch('/api/conversations', {
+      method: 'POST',
+    }).then((r) => r.json());
+
+    const conv = await VoiceConversation.create({
+      conversationToken,
+      livekitUrl,
+      onConnect: () => setStatus('connected'),
+      onDisconnect: () => setStatus('idle'),
+      onMessage: ({ source, text, isFinal }) => {
+        if (isFinal) setTranscript((t) => [...t, `${source}: ${text}`]);
+      },
+      onStatusChange: (s) => setStatus(s),
+      onError: (err) => console.error(err),
+    });
+
+    convRef.current = conv;
+  }
+
+  async function stop() {
+    await convRef.current?.endSession();
+    convRef.current = null;
+  }
+
+  useEffect(() => () => { void convRef.current?.endSession(); }, []);
+
+  return (
+    <div>
+      <button onClick={start} disabled={status !== 'idle'}>Start</button>
+      <button onClick={stop} disabled={status === 'idle'}>Stop</button>
+      <p>Status: {status}</p>
+      <ul>{transcript.map((t, i) => <li key={i}>{t}</li>)}</ul>
+    </div>
+  );
+}
+```
+
+That's the whole loop: mint → connect → talk → end.
+
+## What you can do mid-conversation
+
+```ts
+await conv.setMicMuted(true);
+conv.setVolume(0.8);
+conv.sendUserMessage('hello');                 // text input as if spoken
+conv.sendContextualUpdate('user navigated to checkout');
+```
+
+`sendContextualUpdate` injects context the agent will see on its next turn without speaking it aloud — useful for app-state changes the agent should know about.
+
+## Mic / device control
+
+`@spekoai/client` requests the mic with sensible defaults (echo cancel, noise suppression, AGC). Override per session:
+
+```ts
+await VoiceConversation.create({
+  conversationToken,
+  livekitUrl,
+  audioConstraints: {
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+  },
+});
+```
+
+## What the SDK does not handle
+
+- **Token minting.** Always server-side — your API key must not ship to browsers.
+- **Reconnect / retry.** A failed `connect()` throws `SpekoClientError`. Your UX decides whether to retry.
+- **Tool calls / MCP / VAD streaming.** Deferred.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Client API" icon="globe" href="/client/overview">
+    Full `@spekoai/client` reference.
+  </Card>
+  <Card title="Build the agent worker" icon="microphone" href="/guides/voice-agent">
+    Worker side of the same architecture.
+  </Card>
+</CardGroup>

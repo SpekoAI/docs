@@ -1,0 +1,46 @@
+---
+title: 'Bring your own keys'
+description: 'Use your own provider credentials. Speko routes; providers bill you directly.'
+---
+
+By default, calls run against Speko-managed provider credentials and roll up to a single Speko bill. With BYOK (Bring Your Own Keys) you supply your own API keys per provider — Speko still picks the best provider per call, but the provider charges *you*.
+
+## Why BYOK
+
+- **Existing volume discount.** You already have negotiated rates with Deepgram, OpenAI, ElevenLabs, etc.
+- **Compliance.** You hold the contract / DPA / BAA with the provider directly.
+- **Spend visibility.** Provider invoices land in your existing billing.
+
+## Configure
+
+Open the dashboard → **Settings → Providers**. Paste each provider's API key. Speko stores secrets encrypted at rest and uses them only for your organization's traffic.
+
+Programmatic equivalent: `PUT /v1/providers` with `{ provider, apiKey }`.
+
+```bash
+curl -X PUT https://api.speko.dev/v1/providers \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "provider": "deepgram", "apiKey": "..." }'
+```
+
+Remove a key with `DELETE /v1/providers/:provider`. The provider falls back to platform-managed credentials.
+
+## How the router resolves credentials
+
+For each call, the router picks the highest-ranked provider for the intent (subject to constraints), then asks the secrets store: "do we have an org-scoped key for this provider?"
+
+- **Yes** → use the BYOK key. Failover candidates that lack BYOK keys fall through to platform-managed credentials if those exist.
+- **No** → use platform-managed credentials. If none configured, that candidate is skipped.
+
+## Inspect status
+
+`GET /v1/providers` returns each known provider plus a `configured` flag and a `source` of `null` (platform-managed) or `"BYOK"`. Mirrored in the dashboard's provider grid.
+
+## Supported providers
+
+- **STT**: Deepgram, AssemblyAI
+- **LLM**: OpenAI
+- **TTS**: ElevenLabs, Cartesia
+
+The list grows. `GET /v1/providers/known` is the source of truth.

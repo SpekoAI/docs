@@ -1,0 +1,32 @@
+---
+title: 'Errors'
+description: 'Typed exceptions raised by the Python SDK.'
+---
+
+All SDK methods raise one of three exceptions on non-2xx HTTP responses.
+
+| Exception | When | Attributes |
+| --- | --- | --- |
+| `SpekoAuthError` | `401` from the API | `message` |
+| `SpekoRateLimitError` | `429` from the API | `message`, `retry_after` (seconds, optional) |
+| `SpekoApiError` | any other non-2xx | `message`, `status`, `code` |
+
+```python
+from spekoai import SpekoAI, SpekoAuthError, SpekoRateLimitError, SpekoApiError
+
+speko = SpekoAI(api_key="sk_live_...")
+
+try:
+    speko.sessions.create(pipeline=...)
+except SpekoAuthError:
+    # API key bad / revoked. Don't retry.
+    raise
+except SpekoRateLimitError as e:
+    # Backoff and retry.
+    sleep(e.retry_after or 1)
+except SpekoApiError as e:
+    # Generic upstream failure. Inspect e.status, e.code.
+    log.exception("speko call failed: %s (%s)", e.code, e.status)
+```
+
+`message` and `code` are extracted from the JSON error body when present; otherwise from `response.text` and a fallback `"UNKNOWN"`.

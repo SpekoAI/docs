@@ -1,0 +1,37 @@
+---
+title: 'usage'
+description: 'Query usage summary for the current billing period.'
+---
+
+```python
+speko.usage.get(from_date=None, to_date=None) -> UsageSummary
+```
+
+## get
+
+```python
+from spekoai import SpekoAI
+
+speko = SpekoAI(api_key="sk_live_...")
+
+summary = speko.usage.get(from_date="2026-04-01", to_date="2026-04-15")
+
+summary.total_sessions    # int
+summary.total_minutes     # int
+summary.total_cost        # float
+for row in summary.breakdown:
+    row.provider          # "deepgram" | "openai" | ...
+    row.type              # "stt" | "llm" | "tts"
+    row.metric            # "stt_seconds" | "tts_characters" | "llm_tokens"
+    row.quantity          # int
+    row.cost              # float
+```
+
+Both `from_date` and `to_date` accept ISO-8601 dates or datetimes. Omit either to default to the current billing period.
+
+## Async equivalent
+
+```python
+async with AsyncSpekoAI(api_key="sk_live_...") as speko:
+    summary = await speko.usage.get(from_date="2026-04-01")
+```

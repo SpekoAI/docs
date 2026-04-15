@@ -1,0 +1,70 @@
+---
+title: 'API keys'
+description: 'List, create, and revoke organization API keys.'
+---
+
+## GET /v1/api-keys
+
+List all keys for the authenticated organization. Revoked keys are included so you can audit history.
+
+### Response (`200 OK`)
+
+```json
+[
+  {
+    "id": "...",
+    "name": "prod-server",
+    "keyPrefix": "sk_live_abc1234...",
+    "scopes": [],
+    "revoked": false,
+    "lastUsedAt": "2026-04-15T10:00:00.000Z",
+    "createdAt": "2026-04-01T09:00:00.000Z"
+  }
+]
+```
+
+The raw key value is **never** returned by this endpoint. It exists only in the response of `POST /v1/api-keys`.
+
+---
+
+## POST /v1/api-keys
+
+Mint a new key.
+
+### Request
+
+```json
+{ "name": "prod-server" }
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `name` | string | yes | 1–100 chars. Free-form label. |
+
+### Response (`201 Created`)
+
+```json
+{
+  "id": "...",
+  "name": "prod-server",
+  "key": "sk_live_<48 hex chars>",
+  "keyPrefix": "sk_live_abc1234...",
+  "createdAt": "2026-04-15T10:00:00.000Z"
+}
+```
+
+`key` is shown **once**. Save it immediately.
+
+---
+
+## DELETE /v1/api-keys/:id
+
+Revoke a key. Idempotent — revoking an already-revoked key is a no-op success.
+
+### Response (`200 OK`)
+
+```json
+{ "id": "...", "revoked": true }
+```
+
+In-flight requests using the key complete; subsequent requests get `401`.

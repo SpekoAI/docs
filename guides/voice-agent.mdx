@@ -1,0 +1,140 @@
+---
+title: 'Build a voice agent'
+description: 'Real-time STT → LLM → TTS pipeline using @spekoai/adapter-livekit on a LiveKit Agents worker.'
+---
+
+This guide walks through standing up a LiveKit Agents worker that uses Speko for every modality. The worker registers with LiveKit Cloud, joins rooms on demand, and runs a streaming voice pipeline backed by Speko's routing.
+
+If you only want browser-side conversation logic and don't run your own worker, see the [hosted session flow](/guides/realtime-conversation) instead.
+
+## Architecture
+
+```
+Browser ⟷ LiveKit room ⟷ your agent worker
+                              │
+                              └─→ @spekoai/sdk → Speko gateway → providers
+```
+
+Three processes meet in a LiveKit room:
+
+1. **Browser** uses [`@spekoai/client`](/client/overview) to join with a session token your server mints.
+2. **Your API server** mints the token (`POST /v1/sessions` or your own `livekit-server-sdk` flow) and dispatches the agent worker.
+3. **Your agent worker** (this guide) runs `@livekit/agents` with Speko-backed STT/LLM/TTS.
+
+Audio flows browser ↔ LiveKit ↔ worker. Speko sits in the control path, not the audio path.
+
+## Install
+
+```bash
+npm install @spekoai/sdk @spekoai/adapter-livekit \
+            @livekit/agents @livekit/agents-plugin-silero @livekit/rtc-node
+```
+
+`@livekit/agents` and `@livekit/rtc-node` are peers — pin the versions you actually run.
+
+## Worker entry
+
+```ts agent.ts
+import {
+  type JobContext,
+  type JobProcess,
+  ServerOptions,
+  cli,
+  defineAgent,
+  voice,
+} from '@livekit/agents';
+import * as silero from '@livekit/agents-plugin-silero';
+import { Speko } from '@spekoai/sdk';
+import { createSpekoComponents } from '@spekoai/adapter-livekit';
+import { fileURLToPath } from 'node:url';
+
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
+
+export default defineAgent({
+  prewarm: async (proc: JobProcess) => {
+    proc.userData.vad = await silero.VAD.load();
+  },
+  entry: async (ctx: JobContext) => {
+    const vad = ctx.proc.userData.vad as silero.VAD;
+
+    const { stt, llm, tts } = createSpekoComponents({
+      speko,
+      vad,
+      intent: { language: 'en-US', vertical: 'general', optimizeFor: 'balanced' },
+      // optional: pin providers
+      // constraints: { allowedProviders: { tts: ['cartesia'] } },
+    });
+
+    const session = new voice.AgentSession({ vad, stt, llm, tts });
+
+    await session.start({
+      agent: new voice.Agent({
+        instructions: 'You are a helpful voice assistant. Be concise.',
+      }),
+      room: ctx.room,
+    });
+
+    await ctx.connect();
+    session.generateReply({ instructions: 'Greet the user and offer your assistance.' });
+  },
+});
+
+cli.runApp(
+  new ServerOptions({
+    agent: fileURLToPath(import.meta.url),
+    agentName: 'speko-demo',
+  }),
+);
+```
+
+Run it with `node agent.js` (after build) or your `tsx`/`bun` setup of choice. The worker registers with LiveKit Cloud under `agentName` and waits for dispatches.
+
+## Per-session config from dispatch metadata
+
+When your server creates a session, the dispatcher passes JSON metadata to the worker. Read it in `entry` to build pipeline-per-session:
+
+```ts
+import { z } from 'zod';
+
+const dispatchSchema = z.object({
+  sessionId: z.string(),
+  intent: z.object({
+    language: z.string(),
+    vertical: z.enum(['general', 'healthcare', 'finance', 'legal']),
+    optimizeFor: z.enum(['balanced', 'accuracy', 'latency', 'cost']).optional(),
+  }),
+  constraints: z.any().optional(),
+  voice: z.string().optional(),
+  systemPrompt: z.string().optional(),
+});
+
+const meta = dispatchSchema.parse(JSON.parse(ctx.job.metadata ?? '{}'));
+
+const { stt, llm, tts } = createSpekoComponents({
+  speko,
+  vad,
+  intent: meta.intent,
+  constraints: meta.constraints,
+  voice: meta.voice,
+});
+```
+
+## Limitations of v1
+
+- **Non-streaming end-to-end.** STT waits for end-of-utterance, LLM returns one chunk, TTS synthesizes a sentence at a time.
+- **No tool / function calls.** `/v1/complete` doesn't expose tool invocation yet.
+- **TTS format constraints.** Cartesia (PCM) and WAV TTS work. ElevenLabs MP3 currently throws — pin a PCM-capable provider via `constraints.allowedProviders.tts` or rely on the router's score-driven default.
+- **STT input.** Mono PCM16 frames; multi-channel throws.
+
+See [`@spekoai/adapter-livekit` reference](/adapter-livekit/overview) for the full surface.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Browser side" icon="browser" href="/guides/realtime-conversation">
+    Wire `@spekoai/client` into your dashboard / web app.
+  </Card>
+  <Card title="Adapter API" icon="plug" href="/adapter-livekit/overview">
+    Full adapter reference.
+  </Card>
+</CardGroup>

@@ -1,0 +1,26 @@
+---
+title: 'Bring your own keys'
+description: 'Connect your own provider API keys so providers bill you directly while Speko still routes.'
+---
+
+In **Settings → Providers** the dashboard lists every supported provider with a green/red status dot and `BYOK` / platform-managed source label.
+
+## Add a key
+
+1. Click the row for the provider you want to configure.
+2. Paste the provider's API key.
+3. Save.
+
+The key is encrypted at rest and used only for traffic in your organization. Status flips to green and `source: BYOK` once stored.
+
+## Remove a key
+
+Open the row and click **Remove**. Speko falls back to platform-managed credentials for that provider (if any), or skips the provider during routing if none are available.
+
+## See what's configured
+
+The provider grid on the overview page mirrors `GET /v1/providers`. Hover a row for `lastUpdatedAt`. Sort by status to find anything red.
+
+## Programmatic equivalent
+
+Same UI, exposed as REST. See the [BYOK concept](/concepts/byok) and [`/v1/providers`](/api-reference/providers) endpoints.
