@@ -19,7 +19,7 @@ Every endpoint requires a bearer API key in the `Authorization` header:
 Authorization: Bearer sk_live_...
 ```
 
-Mint a key in the dashboard under **Settings → API keys** or via [`POST /v1/api-keys`](/api-reference/api-keys).
+Mint a key in the dashboard under **Settings → API keys**.
 
 The OAuth-based session token issued by `POST /v1/sessions` is **not** an API key — it's scoped to a single LiveKit room and is used by the browser SDK, not for general REST calls.
 
@@ -70,19 +70,6 @@ Log these in production. They're how you correlate behavior with routing decisio
   <Card title="Complete" icon="comments" href="/api-reference/complete">
     LLM completion with routing + failover.
   </Card>
-  <Card title="API keys" icon="key" href="/api-reference/api-keys">
-    Mint, list, revoke keys.
-  </Card>
-  <Card title="Providers (BYOK)" icon="plug" href="/api-reference/providers">
-    Manage per-provider API keys.
-  </Card>
-  <Card title="Usage" icon="chart-line" href="/api-reference/usage">
-    Per-provider, per-metric usage.
-  </Card>
-  <Card title="Routing" icon="route" href="/api-reference/routing">
-    Preview the router's pick for an intent.
-  </Card>
-  <Card title="Organization" icon="building" href="/api-reference/organization">
-    Current organization info.
-  </Card>
 </CardGroup>
+
+Account management (API keys, BYOK provider credentials, usage, organization) is handled in the [dashboard](https://speko.dev).

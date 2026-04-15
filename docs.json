@@ -122,16 +122,6 @@
               "api-reference/synthesize",
               "api-reference/complete"
             ]
-          },
-          {
-            "group": "Account",
-            "pages": [
-              "api-reference/api-keys",
-              "api-reference/providers",
-              "api-reference/usage",
-              "api-reference/routing",
-              "api-reference/organization"
-            ]
           }
         ]
       }

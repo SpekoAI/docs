@@ -5,17 +5,14 @@ description: 'One API for every voice provider. Speko benchmarks STT, LLM, and T
 
 Speko is a voice gateway. You ship one integration; we route each request to the highest-scoring provider for your `(language, vertical, optimizeFor)` intent. Failover is server-side. Providers rotate without a code change.
 
-## Three ways to integrate
+## Two ways to integrate
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="One-shot HTTP" icon="terminal" href="/guides/one-shot">
     Call `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` directly. Best for batch jobs and server pipelines.
   </Card>
-  <Card title="Real-time voice agent" icon="microphone" href="/guides/voice-agent">
-    LiveKit-based agent worker. Browser ↔ agent ↔ Speko. STT/LLM/TTS pipeline runs in your worker.
-  </Card>
   <Card title="Browser conversation" icon="browser" href="/guides/realtime-conversation">
-    `@spekoai/client` joins a Speko session over WebRTC. Mic in, agent voice out, transcripts on the data channel.
+    Real-time voice in the browser. Mic in, agent voice out, transcripts on the data channel.
   </Card>
 </CardGroup>
 
@@ -40,15 +37,15 @@ Speko is a voice gateway. You ship one integration; we route each request to the
 
 <CardGroup cols={2}>
   <Card title="@spekoai/sdk" icon="js" href="/sdk/overview">
-    TypeScript HTTP client. Node + browser.
+    TypeScript HTTP client.
   </Card>
   <Card title="@spekoai/client" icon="globe" href="/client/overview">
-    Browser SDK for real-time voice over WebRTC.
-  </Card>
-  <Card title="@spekoai/adapter-livekit" icon="plug" href="/adapter-livekit/overview">
-    Drop-in STT/LLM/TTS for LiveKit agent workers.
+    Browser SDK for real-time voice.
   </Card>
   <Card title="spekoai (Python)" icon="python" href="/sdk-python/overview">
-    Async Python client. Same API as the TS SDK.
+    Async + sync Python client.
+  </Card>
+  <Card title="Framework adapters" icon="plug" href="/adapter-livekit/overview">
+    Drop-in STT/LLM/TTS for your existing voice agent framework.
   </Card>
 </CardGroup>
