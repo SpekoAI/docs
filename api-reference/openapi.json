@@ -12,6 +12,14 @@
     {
       "url": "https://api.speko.dev",
       "description": "Production"
+    },
+    {
+      "url": "https://api.speko.ai",
+      "description": "Production (alias)"
+    },
+    {
+      "url": "https://api-staging.speko.dev",
+      "description": "Staging"
     }
   ],
   "security": [

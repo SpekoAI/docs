@@ -1,75 +1,42 @@
 ---
-title: 'API reference'
-description: 'REST API for the Speko voice gateway — sessions, one-shot transcribe/synthesize/complete, BYOK, usage.'
+title: 'Introduction'
+description: 'Public REST API for the Speko voice gateway.'
 ---
 
-The Speko REST API is hosted at `https://api.speko.dev`. All endpoints are under `/v1/`. Requests and responses are JSON unless noted (transcribe accepts binary audio; synthesize returns binary audio).
+## Welcome
 
-## Base URL
+The Speko API exposes the voice gateway over four public endpoints — `sessions`, `transcribe`, `synthesize`, and `complete`. Each call carries a routing intent; Speko picks the highest-scoring provider and fails over server-side. The full spec is below.
 
-```
-https://api.speko.dev
-```
+<Card
+  title="OpenAPI specification"
+  icon="file-code"
+  href="https://github.com/SpekoAI/docs/blob/main/api-reference/openapi.json"
+>
+  View the OpenAPI 3.1 spec file
+</Card>
+
+## Servers
+
+| Environment | Base URL |
+| --- | --- |
+| Production | `https://api.speko.dev` |
+| Production (alias) | `https://api.speko.ai` |
+| Staging | `https://api-staging.speko.dev` |
 
 ## Authentication
 
-Every endpoint requires a bearer API key in the `Authorization` header:
+All endpoints are authenticated with a bearer API key. Mint one in the dashboard under **Settings → API keys**.
 
 ```http
 Authorization: Bearer sk_live_...
 ```
 
-Mint a key in the dashboard under **Settings → API keys**.
-
-The OAuth-based session token issued by `POST /v1/sessions` is **not** an API key — it's scoped to a single LiveKit room and is used by the browser SDK, not for general REST calls.
-
-## Errors
-
-Errors return `application/json`:
+The OpenAPI spec declares this scheme as `bearerAuth`:
 
 ```json
-{
-  "error": "human-readable message",
-  "code": "MACHINE_READABLE_CODE"
-}
+"security": [
+  {
+    "bearerAuth": []
+  }
+]
 ```
-
-Common codes:
-
-| HTTP | Code | Meaning |
-| --- | --- | --- |
-| `400` | `INVALID_AUDIO`, `INVALID_INTENT`, `VALIDATION_ERROR` | Malformed request. |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key. |
-| `429` | `RATE_LIMITED` | Backoff, then retry; respect `Retry-After`. |
-| `5xx` | `TRANSCRIBE_FAILED`, `SYNTHESIZE_FAILED`, `COMPLETE_FAILED`, `ALL_PROVIDERS_FAILED`, `SESSION_CREATE_FAILED` | Upstream / routing failure. |
-
-## Routing headers
-
-`/v1/transcribe`, `/v1/synthesize`, `/v1/complete` all return:
-
-- `X-Speko-Provider` — provider that handled the call
-- `X-Speko-Model` — specific model
-- `X-Speko-Failover-Count` — number of providers tried before success
-- `X-Speko-Scores-Run-Id` — benchmark snapshot id used for routing
-- `/v1/synthesize` additionally: `X-Speko-Audio-Format`
-
-Log these in production. They're how you correlate behavior with routing decisions.
-
-## Endpoints
-
-<CardGroup cols={2}>
-  <Card title="Sessions" icon="microphone" href="/api-reference/sessions">
-    Create real-time voice sessions.
-  </Card>
-  <Card title="Transcribe" icon="ear-listen" href="/api-reference/transcribe">
-    Speech to text with routing + failover.
-  </Card>
-  <Card title="Synthesize" icon="waveform" href="/api-reference/synthesize">
-    Text to speech with routing + failover.
-  </Card>
-  <Card title="Complete" icon="comments" href="/api-reference/complete">
-    LLM completion with routing + failover.
-  </Card>
-</CardGroup>
-
-Account management (API keys, BYOK provider credentials, usage, organization) is handled in the [dashboard](https://speko.dev).
