@@ -123,8 +123,7 @@
               "api-reference/complete"
             ]
           }
-        ],
-        "openapi": "/api-reference/openapi.json"
+        ]
       }
     ],
     "global": {
