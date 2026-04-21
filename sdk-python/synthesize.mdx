@@ -1,0 +1,126 @@
+---
+title: 'synthesize'
+description: 'POST /v1/synthesize — text-to-speech with automatic provider routing.'
+---
+
+Synthesize text into audio. The router picks the best TTS provider for your `(language, vertical, optimize_for)` and fails over automatically.
+
+```python
+speech = speko.synthesize(
+    "Hello world",
+    language="en",
+    vertical="general",
+)
+Path("out.mp3").write_bytes(speech.audio)
+```
+
+## Signature
+
+<CodeGroup>
+```python sync
+Speko.synthesize(
+    text: str,
+    *,
+    language: str,
+    vertical: Vertical,
+    optimize_for: OptimizeFor | None = None,
+    voice: str | None = None,
+    speed: float | None = None,
+    constraints: PipelineConstraints | dict | None = None,
+) -> SynthesizeResult
+```
+
+```python async
+await AsyncSpeko.synthesize(
+    text: str,
+    *,
+    language: str,
+    vertical: Vertical,
+    optimize_for: OptimizeFor | None = None,
+    voice: str | None = None,
+    speed: float | None = None,
+    constraints: PipelineConstraints | dict | None = None,
+) -> SynthesizeResult
+```
+</CodeGroup>
+
+## Parameters
+
+<ParamField path="text" type="string" required>
+  The text to synthesize. No client-side length limit — the upstream provider applies its own.
+</ParamField>
+
+<ParamField path="language" type="string" required>
+  BCP-47 language tag.
+</ParamField>
+
+<ParamField path="vertical" type="'general' | 'healthcare' | 'finance' | 'legal'" required />
+
+<ParamField path="optimize_for" type="'balanced' | 'accuracy' | 'latency' | 'cost'" />
+
+<ParamField path="voice" type="string">
+  Voice id override. Interpreted per provider (e.g. a Cartesia voice UUID, an ElevenLabs voice id). Omit to use each provider's default.
+</ParamField>
+
+<ParamField path="speed" type="float">
+  Speech speed multiplier. Providers vary in accepted ranges — `1.0` is always neutral.
+</ParamField>
+
+<ParamField path="constraints" type="PipelineConstraints | dict">
+  Allow-list constraints.
+</ParamField>
+
+## Returns — `SynthesizeResult`
+
+<ResponseField name="audio" type="bytes">
+  Raw audio bytes. Format depends on the chosen provider — always branch on `content_type`.
+</ResponseField>
+
+<ResponseField name="content_type" type="string">
+  MIME type. ElevenLabs returns `audio/mpeg`. Cartesia returns `audio/pcm;rate=24000`.
+</ResponseField>
+
+<ResponseField name="provider" type="string" />
+<ResponseField name="model" type="string" />
+
+<ResponseField name="failover_count" type="int">
+  Providers tried before this one succeeded.
+</ResponseField>
+
+<ResponseField name="scores_run_id" type="string | None" />
+
+## Example — write to disk
+
+```python
+from pathlib import Path
+
+speech = speko.synthesize(
+    "Welcome to the clinic.",
+    language="en",
+    vertical="healthcare",
+    voice="sonic-english",
+)
+
+ext = "mp3" if "mpeg" in speech.content_type else "pcm"
+Path(f"greeting.{ext}").write_bytes(speech.audio)
+```
+
+## Example — pin a PCM provider
+
+```python
+from spekoai import AllowedProviders, PipelineConstraints
+
+speech = speko.synthesize(
+    "Hello",
+    language="en",
+    vertical="general",
+    constraints=PipelineConstraints(
+        allowed_providers=AllowedProviders(tts=["cartesia"]),
+    ),
+)
+# speech.content_type == "audio/pcm;rate=24000"
+```
+
+<Warning>
+  Downstream consumers that only handle PCM (e.g. older LiveKit pipelines) should pin a PCM provider via `constraints` — or branch on `content_type` before decoding. MP3 from ElevenLabs will otherwise hit your decoder unexpectedly.
+</Warning>

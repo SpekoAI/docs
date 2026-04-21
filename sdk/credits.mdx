@@ -1,0 +1,81 @@
+---
+title: 'credits'
+description: 'Prepaid balance and append-only ledger.'
+---
+
+Query the organization's prepaid credit balance and walk the ledger of every credit movement. Exposed via `speko.credits`.
+
+Balances are in micro-USD (`1_000_000` µ$ = $1). The SDK also pre-divides to a float USD helper.
+
+```ts
+const { balanceUsd } = await speko.credits.getBalance();
+if (balanceUsd < 0.5) showLowBalanceBanner();
+```
+
+## `speko.credits.getBalance()`
+
+### Signature
+
+```ts
+speko.credits.getBalance(): Promise<OrganizationBalance>
+```
+
+### Returns — `OrganizationBalance`
+
+| Field              | Type     | Description                                                                 |
+| ------------------ | -------- | --------------------------------------------------------------------------- |
+| `balanceMicroUsd`  | `string` | Current balance as micro-USD, string-encoded so values beyond `2^53` survive JSON. |
+| `balanceUsd`       | `number` | Same balance, pre-divided for display.                                      |
+| `updatedAt`        | `string` | ISO-8601 timestamp of the last ledger event.                                |
+
+## `speko.credits.getLedger(params?)`
+
+Most-recent-first page of credit movements (grants, debits, topups, refunds, adjustments). Pass the previous response's `nextCursor` back as `cursor` to continue; `null` means the history is exhausted.
+
+### Signature
+
+```ts
+speko.credits.getLedger(
+  params?: CreditLedgerQueryParams,
+): Promise<CreditLedgerPage>
+```
+
+### `CreditLedgerQueryParams`
+
+| Field    | Type      | Description                                                 |
+| -------- | --------- | ----------------------------------------------------------- |
+| `limit`  | `number?` | Page size. Server default applies if omitted.               |
+| `cursor` | `string?` | `nextCursor` from a previous response.                      |
+
+### Returns — `CreditLedgerPage`
+
+| Field        | Type                     | Description                                             |
+| ------------ | ------------------------ | ------------------------------------------------------- |
+| `entries`    | `CreditLedgerEntry[]`    | Page contents.                                          |
+| `nextCursor` | `string \| null`         | Pass back as `cursor` for the next page, `null` if done. |
+
+### `CreditLedgerEntry`
+
+| Field              | Type                                                             | Description                                                                 |
+| ------------------ | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `id`               | `string`                                                         | Ledger entry id.                                                            |
+| `kind`             | `'grant' \| 'debit' \| 'topup' \| 'refund' \| 'adjustment'`      | Movement type.                                                              |
+| `amountMicroUsd`   | `string`                                                         | Signed. Positive for grants/topups/refunds, negative for debits.            |
+| `metric`           | `string \| null`                                                 | Metric when tied to a usage row.                                            |
+| `provider`         | `string \| null`                                                 | Upstream provider the debit was applied to.                                 |
+| `sessionId`        | `string \| null`                                                 | Session the debit was applied against.                                      |
+| `createdAt`        | `string`                                                         | ISO-8601.                                                                   |
+
+## Example — paginate the ledger
+
+```ts
+let cursor: string | undefined = undefined;
+
+do {
+  const page = await speko.credits.getLedger({ limit: 50, cursor });
+  for (const entry of page.entries) {
+    console.log(entry.createdAt, entry.kind, entry.amountMicroUsd);
+  }
+  cursor = page.nextCursor ?? undefined;
+} while (cursor);
+```

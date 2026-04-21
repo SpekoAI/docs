@@ -1,0 +1,125 @@
+---
+title: 'complete'
+description: 'POST /v1/complete — LLM completion with automatic provider routing.'
+---
+
+Run a single-shot LLM completion. The router picks the best LLM provider for your intent and fails over automatically.
+
+```python
+from spekoai import ChatMessage, RoutingIntent
+
+reply = speko.complete(
+    messages=[ChatMessage(role="user", content="Hi!")],
+    intent=RoutingIntent(language="en", vertical="general"),
+)
+print(reply.text, reply.provider, reply.usage.prompt_tokens)
+```
+
+## Signature
+
+<CodeGroup>
+```python sync
+Speko.complete(
+    *,
+    messages: list[ChatMessage | dict],
+    intent: RoutingIntent | dict,
+    system_prompt: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    constraints: PipelineConstraints | dict | None = None,
+) -> CompleteResult
+```
+
+```python async
+await AsyncSpeko.complete(
+    *,
+    messages: list[ChatMessage | dict],
+    intent: RoutingIntent | dict,
+    system_prompt: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    constraints: PipelineConstraints | dict | None = None,
+) -> CompleteResult
+```
+</CodeGroup>
+
+## Parameters
+
+<ParamField path="messages" type="list[ChatMessage | dict]" required>
+  Conversation history. Roles: `system`, `user`, `assistant`. Dicts are validated against `ChatMessage` on the way in.
+</ParamField>
+
+<ParamField path="intent" type="RoutingIntent | dict" required>
+  Routing intent — `language`, `vertical`, optional `optimize_for`.
+</ParamField>
+
+<ParamField path="system_prompt" type="string">
+  Shortcut for a leading system message. Providers with a native system channel use it directly; others fold it into the message list.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Forwarded to the provider. Omit to use the provider's default.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Max completion tokens. Omit to use the provider's default.
+</ParamField>
+
+<ParamField path="constraints" type="PipelineConstraints | dict" />
+
+## Returns — `CompleteResult`
+
+<ResponseField name="text" type="string">
+  Assistant reply.
+</ResponseField>
+
+<ResponseField name="provider" type="string" />
+<ResponseField name="model" type="string" />
+
+<ResponseField name="usage.prompt_tokens" type="int" />
+<ResponseField name="usage.completion_tokens" type="int" />
+
+<ResponseField name="failover_count" type="int" />
+<ResponseField name="scores_run_id" type="string | None" />
+
+<Info>
+  `/v1/complete` is buffered — each call returns one full completion. Streaming and tool / function calling are on the roadmap.
+</Info>
+
+## Example — multi-turn
+
+```python
+messages = [
+    {"role": "system", "content": "You are a concise voice assistant."},
+    {"role": "user", "content": "Book me an appointment for Tuesday."},
+]
+
+first = speko.complete(
+    messages=messages,
+    intent={"language": "en", "vertical": "healthcare"},
+    temperature=0.3,
+    max_tokens=200,
+)
+
+messages.append({"role": "assistant", "content": first.text})
+messages.append({"role": "user", "content": "3pm, with Dr. Chen."})
+
+second = speko.complete(
+    messages=messages,
+    intent={"language": "en", "vertical": "healthcare"},
+)
+```
+
+## Example — pin a provider
+
+```python
+from spekoai import AllowedProviders, PipelineConstraints
+
+reply = speko.complete(
+    messages=[{"role": "user", "content": "…"}],
+    intent={"language": "en", "vertical": "finance"},
+    constraints=PipelineConstraints(
+        allowed_providers=AllowedProviders(llm=["anthropic"]),
+    ),
+)
+```

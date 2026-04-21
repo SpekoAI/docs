@@ -1,0 +1,119 @@
+---
+title: 'realtime'
+description: 'Speech-to-speech WebSocket sessions — OpenAI Realtime, Gemini Live, xAI Grok Voice.'
+---
+
+Open a speech-to-speech (S2S) session. `speko.realtime.connect()` mints a short-lived WebSocket token via `POST /v1/sessions` and returns a handle connected directly to Speko's S2S proxy, which bridges to the underlying provider. LiveKit is skipped entirely so time-to-first-audio stays under ~300 ms.
+
+<Info>
+  `Realtime` targets the browser `WebSocket` global. In Node 22+ you can polyfill with `ws` via `globalThis.WebSocket = (await import('ws')).WebSocket;` — but the typical deployment is a browser paired with `@spekoai/client` for mic capture.
+</Info>
+
+```ts
+import { Speko } from '@spekoai/sdk';
+
+const speko = new Speko({ apiKey: import.meta.env.VITE_SPEKO_API_KEY });
+
+const session = await speko.realtime.connect({
+  provider: 'openai',
+  model: 'gpt-realtime',
+});
+
+session.on((frame) => {
+  if (frame.type === 'audio') play(frame.pcm);
+  else if (frame.type === 'transcript') console.log(frame.role, frame.text);
+});
+
+session.sendAudio(pcm16Chunk);
+// ... end of user turn
+session.commit();
+```
+
+## `speko.realtime.connect(params)`
+
+### Signature
+
+```ts
+speko.realtime.connect(
+  params: RealtimeConnectParams,
+): Promise<RealtimeSessionHandle>
+```
+
+### `RealtimeConnectParams`
+
+| Field                | Type                                            | Description                                                                                 |
+| -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `provider`           | `'openai' \| 'google' \| 'xai'`                 | S2S provider.                                                                               |
+| `model`              | `string`                                        | Provider-specific model id (e.g. `gpt-realtime`, `gemini-2.5-flash-native-audio`).          |
+| `voice`              | `string?`                                       | Voice id override — interpreted per provider.                                               |
+| `systemPrompt`       | `string?`                                       | Initial system instruction.                                                                 |
+| `temperature`        | `number?`                                       |                                                                                             |
+| `inputSampleRate`    | `16000 \| 24000?`                               | PCM rate you'll be sending.                                                                 |
+| `outputSampleRate`   | `16000 \| 24000?`                               | PCM rate you want back.                                                                     |
+| `tools`              | `RealtimeToolSpec[]?`                           | Tool definitions the assistant may call.                                                    |
+| `metadata`           | `Record<string, unknown>?`                      | Free-form metadata attached to the session record.                                          |
+| `ttlSeconds`         | `number?`                                       | Max session duration. Server-capped at 1800 (30 min).                                       |
+
+## `RealtimeSessionHandle`
+
+| Property       | Type     | Description                       |
+| -------------- | -------- | --------------------------------- |
+| `sessionId`    | `string` | Server-assigned session id.       |
+| `expiresAt`    | `string` | ISO-8601 expiry of the WS token.  |
+
+### Methods
+
+| Method                                         | Description                                                                            |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `sendAudio(pcm: Uint8Array): void`             | Ship a PCM16 audio chunk up to the model.                                              |
+| `commit(): void`                               | Signal end-of-user-turn; server flushes buffered audio upstream.                       |
+| `interrupt(): void`                            | Cancel the assistant's in-flight response.                                             |
+| `sendToolResult(callId, output): void`         | Return the result of a previously-issued `tool_call`.                                  |
+| `on(handler): () => void`                      | Subscribe to frames. Returns an unsubscribe callback.                                  |
+| `close(code?, reason?): void`                  | Close the socket. Idempotent.                                                          |
+
+### `RealtimeFrame` variants
+
+```ts
+type RealtimeFrame =
+  | { type: 'audio'; pcm: Uint8Array; sampleRate: number }
+  | { type: 'transcript'; role: 'user' | 'assistant'; text: string; final: boolean }
+  | { type: 'tool_call'; callId: string; name: string; arguments: string }
+  | { type: 'usage'; inputAudioTokens: number; outputAudioTokens: number }
+  | { type: 'error'; code: string; message: string }
+  | { type: 'close'; code: number; reason: string };
+```
+
+## Example — tool calls
+
+```ts
+const session = await speko.realtime.connect({
+  provider: 'openai',
+  model: 'gpt-realtime',
+  tools: [
+    {
+      name: 'get_weather',
+      description: 'Current weather for a city.',
+      parameters: {
+        type: 'object',
+        properties: { city: { type: 'string' } },
+        required: ['city'],
+      },
+    },
+  ],
+});
+
+session.on(async (frame) => {
+  if (frame.type === 'tool_call' && frame.name === 'get_weather') {
+    const { city } = JSON.parse(frame.arguments);
+    const result = await fetchWeather(city);
+    session.sendToolResult(frame.callId, result);
+  }
+});
+```
+
+## Transport notes
+
+- **Auth via subprotocol.** The WS token is passed as the first WebSocket subprotocol. Browsers can't set headers on `new WebSocket()`, so subprotocol is the only auth carrier that doesn't leak through URL params.
+- **Binary type.** The SDK forces `binaryType = 'arraybuffer'`; inbound audio arrives as `Uint8Array` over an `ArrayBuffer`.
+- **Missing PCM.** Until you call `sendAudio` the upstream provider sees no user input. Hook up a Web Audio `AudioWorklet` capture on the client side, or use `@spekoai/client` which handles capture for you over LiveKit.

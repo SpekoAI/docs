@@ -1,9 +1,11 @@
 ---
 title: 'spekoai (Python)'
-description: 'Async + sync Python SDK for the Speko voice gateway.'
+description: 'Official Python SDK for the Speko voice gateway — sync + async.'
 ---
 
-`spekoai` is the official Python SDK. It currently focuses on **session and usage management** — minting voice sessions and querying usage. For one-shot transcribe / synthesize / complete from Python, call the HTTP endpoints directly with `httpx` until those resources land in the SDK.
+`spekoai` is the Python counterpart to `@spekoai/sdk`. The surface mirrors the TypeScript client one-to-one: `transcribe`, `synthesize`, `complete`, `usage`, `credits`, plus an async-only `connect_realtime` for speech-to-speech sessions.
+
+Speko benchmarks every STT, LLM, and TTS provider per `(language, vertical, optimize_for)` and routes each call to the best one in real time. Failover is server-side — you ship one integration; providers rotate without a code change.
 
 ## Install
 
@@ -13,54 +15,107 @@ pip install spekoai
 uv add spekoai
 ```
 
-Python 3.9+. Depends on `httpx` and `pydantic`.
+Python 3.9+. Depends on `httpx`, `pydantic`, and `websockets`.
 
-## Sync usage
+## Quickstart
 
-```python
-from spekoai import SpekoAI, PipelineConfig, SttConfig, LlmConfig, TtsConfig
+<CodeGroup>
+```python sync
+import os
+from pathlib import Path
 
-with SpekoAI(api_key="sk_live_...") as speko:
-    session = speko.sessions.create(
-        pipeline=PipelineConfig(
-            stt=SttConfig(),
-            llm=LlmConfig(model="gpt-4o"),
-            tts=TtsConfig(provider="elevenlabs", voice="rachel"),
-        ),
-    )
-    print(session.token, session.livekit_url)
+from spekoai import Speko
+
+speko = Speko(api_key=os.environ["SPEKO_API_KEY"])
+
+audio = Path("call.wav").read_bytes()
+result = speko.transcribe(
+    audio,
+    language="es-MX",
+    vertical="healthcare",
+)
+print(result.text, result.provider, result.confidence)
 ```
 
-## Async usage
-
-```python
+```python async
 import asyncio
-from spekoai import AsyncSpekoAI, PipelineConfig, SttConfig, LlmConfig, TtsConfig
+import os
+from pathlib import Path
+
+from spekoai import AsyncSpeko
 
 async def main():
-    async with AsyncSpekoAI(api_key="sk_live_...") as speko:
-        session = await speko.sessions.create(
-            pipeline=PipelineConfig(
-                stt=SttConfig(),
-                llm=LlmConfig(model="gpt-4o"),
-                tts=TtsConfig(provider="elevenlabs", voice="rachel"),
-            ),
+    async with AsyncSpeko(api_key=os.environ["SPEKO_API_KEY"]) as speko:
+        audio = Path("call.wav").read_bytes()
+        result = await speko.transcribe(
+            audio,
+            language="es-MX",
+            vertical="healthcare",
         )
-        print(session.token)
+        print(result.text, result.provider, result.confidence)
 
 asyncio.run(main())
 ```
+</CodeGroup>
 
-## Resources
+## What the router does
 
-- [`sessions`](/sdk-python/sessions) — create / get / end voice sessions.
-- [`usage`](/sdk-python/usage) — query usage summary.
-- [Errors](/sdk-python/errors) — `SpekoApiError`, `SpekoAuthError`, `SpekoRateLimitError`.
+Every proxy call takes a `RoutingIntent` (`language`, `vertical`, optional `optimize_for`). Speko scores every provider for that intent against its continuously-updated benchmark set, picks the top-ranked one, and fails over to the next-best if the primary errors. The returned result carries `provider`, `model`, `failover_count`, and `scores_run_id` so you can log what actually ran.
 
-## Configuration
+To restrict the pool — for compliance, cost caps, or pinning a provider while debugging — pass `constraints=PipelineConstraints(allowed_providers=AllowedProviders(stt=[...], llm=[...], tts=[...]))`. The router still ranks by score but only considers candidates on the allow-list.
 
-| Option | Default | Notes |
-| --- | --- | --- |
-| `api_key` | (required) | Your `sk_live_...` key. |
-| `base_url` | `https://api.speko.ai` | Override for self-hosted or staging. |
-| `timeout` | `30.0` | Per-request timeout in seconds. |
+## Pydantic models, camelCase wire
+
+All request/response models use camelCase aliases over the wire and snake_case attributes in Python. You can pass plain `dict`s wherever a model is accepted — the SDK validates them.
+
+```python
+from spekoai import ChatMessage, RoutingIntent
+
+# Typed form
+speko.complete(
+    messages=[ChatMessage(role="user", content="Hi")],
+    intent=RoutingIntent(language="en", vertical="general"),
+)
+
+# Dict form — validated on the way in
+speko.complete(
+    messages=[{"role": "user", "content": "Hi"}],
+    intent={"language": "en", "vertical": "general"},
+)
+```
+
+## Reference
+
+<Columns cols={2}>
+  <Card title="transcribe" icon="microphone" href="/sdk-python/transcribe">
+    `POST /v1/transcribe` — speech to text.
+  </Card>
+  <Card title="synthesize" icon="volume" href="/sdk-python/synthesize">
+    `POST /v1/synthesize` — text to speech.
+  </Card>
+  <Card title="complete" icon="brain" href="/sdk-python/complete">
+    `POST /v1/complete` — LLM completion.
+  </Card>
+  <Card title="connect_realtime" icon="waveform" href="/sdk-python/realtime">
+    Speech-to-speech WebSocket sessions (async only).
+  </Card>
+  <Card title="usage" icon="chart-line" href="/sdk-python/usage">
+    `GET /v1/usage` — billing summary.
+  </Card>
+  <Card title="credits" icon="coin" href="/sdk-python/credits">
+    Prepaid balance and append-only ledger.
+  </Card>
+  <Card title="errors" icon="triangle-exclamation" href="/sdk-python/errors">
+    `SpekoApiError`, `SpekoAuthError`, `SpekoRateLimitError`.
+  </Card>
+</Columns>
+
+## Client options
+
+| Option     | Default                  | Description                                                                                |
+| ---------- | ------------------------ | ------------------------------------------------------------------------------------------ |
+| `api_key`  | — (required)             | Your API key. Mint one at [dashboard.speko.ai/api-keys](https://dashboard.speko.ai/api-keys). |
+| `base_url` | `https://api.speko.ai`   | Override for staging or self-hosted. Trailing slash is stripped.                           |
+| `timeout`  | `30.0`                   | Per-request timeout in seconds.                                                            |
+
+Both clients are safe to share across concurrent calls. `Speko` is a sync context manager (`__enter__` / `__exit__` / `close()`); `AsyncSpeko` is an async context manager (`__aenter__` / `__aexit__` / `await close()`).

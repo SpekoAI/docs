@@ -67,7 +67,9 @@
               "sdk/transcribe",
               "sdk/synthesize",
               "sdk/complete",
+              "sdk/realtime",
               "sdk/usage",
+              "sdk/credits",
               "sdk/types",
               "sdk/errors"
             ]
@@ -98,8 +100,12 @@
             "group": "spekoai (Python)",
             "pages": [
               "sdk-python/overview",
-              "sdk-python/sessions",
+              "sdk-python/transcribe",
+              "sdk-python/synthesize",
+              "sdk-python/complete",
+              "sdk-python/realtime",
               "sdk-python/usage",
+              "sdk-python/credits",
               "sdk-python/errors"
             ]
           }

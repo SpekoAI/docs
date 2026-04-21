@@ -8,6 +8,7 @@ All types below are exported from the package root:
 ```ts
 import type {
   SpekoClientOptions,
+  KeySource,
   Vertical,
   OptimizeFor,
   RoutingIntent,
@@ -22,6 +23,17 @@ import type {
   UsageSummary,
   UsageByProvider,
   UsageQueryParams,
+  OrganizationBalance,
+  CreditLedgerEntry,
+  CreditLedgerKind,
+  CreditLedgerPage,
+  CreditLedgerQueryParams,
+  RealtimeProvider,
+  RealtimeToolSpec,
+  RealtimeConnectParams,
+  RealtimeFrame,
+  RealtimeEventHandler,
+  RealtimeSessionHandle,
 } from '@spekoai/sdk';
 ```
 
@@ -139,6 +151,8 @@ interface CompleteResult {
 ## Usage
 
 ```ts
+type KeySource = 'BYOK' | 'MANAGED';
+
 interface UsageQueryParams {
   from?: string;                 // ISO-8601
   to?: string;                   // ISO-8601
@@ -149,14 +163,117 @@ interface UsageSummary {
   totalMinutes: number;
   totalCost: number;
   breakdown: UsageByProvider[];
+  balanceMicroUsd: string;       // µ$ as string so values > 2^53 survive JSON
+  balanceUsd: number;
 }
 
 interface UsageByProvider {
   provider: string;
   type: 'stt' | 'llm' | 'tts';
   metric: string;
+  keySource: KeySource;
   quantity: number;
   cost: number;
+}
+```
+
+## Credits
+
+```ts
+interface OrganizationBalance {
+  balanceMicroUsd: string;
+  balanceUsd: number;
+  updatedAt: string;
+}
+
+type CreditLedgerKind =
+  | 'grant'
+  | 'debit'
+  | 'topup'
+  | 'refund'
+  | 'adjustment';
+
+interface CreditLedgerEntry {
+  id: string;
+  kind: CreditLedgerKind;
+  /** Signed. Positive for grants/topups/refunds, negative for debits. */
+  amountMicroUsd: string;
+  metric: string | null;
+  provider: string | null;
+  sessionId: string | null;
+  createdAt: string;
+}
+
+interface CreditLedgerPage {
+  entries: CreditLedgerEntry[];
+  nextCursor: string | null;
+}
+
+interface CreditLedgerQueryParams {
+  limit?: number;
+  cursor?: string;
+}
+```
+
+## Realtime (S2S)
+
+```ts
+type RealtimeProvider = 'openai' | 'google' | 'xai';
+
+interface RealtimeToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+interface RealtimeConnectParams {
+  provider: RealtimeProvider;
+  model: string;
+  voice?: string;
+  systemPrompt?: string;
+  temperature?: number;
+  inputSampleRate?: 16000 | 24000;
+  outputSampleRate?: 16000 | 24000;
+  tools?: RealtimeToolSpec[];
+  metadata?: Record<string, unknown>;
+  /** Max session duration in seconds. Server-capped at 1800 (30 min). */
+  ttlSeconds?: number;
+}
+
+type RealtimeFrame =
+  | { type: 'audio'; pcm: Uint8Array; sampleRate: number }
+  | {
+      type: 'transcript';
+      role: 'user' | 'assistant';
+      text: string;
+      final: boolean;
+    }
+  | {
+      type: 'tool_call';
+      callId: string;
+      name: string;
+      arguments: string;
+    }
+  | {
+      type: 'usage';
+      inputAudioTokens: number;
+      outputAudioTokens: number;
+    }
+  | { type: 'error'; code: string; message: string }
+  | { type: 'close'; code: number; reason: string };
+
+type RealtimeEventHandler = (frame: RealtimeFrame) => void;
+
+interface RealtimeSessionHandle {
+  readonly sessionId: string;
+  readonly expiresAt: string;
+
+  sendAudio(pcm: Uint8Array): void;
+  commit(): void;
+  interrupt(): void;
+  sendToolResult(callId: string, output: string): void;
+  on(handler: RealtimeEventHandler): () => void;
+  close(code?: number, reason?: string): void;
 }
 ```
 

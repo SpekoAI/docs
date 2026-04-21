@@ -1,0 +1,102 @@
+---
+title: 'credits'
+description: 'Prepaid credit balance and append-only ledger.'
+---
+
+Query the organization's prepaid credit balance and walk the ledger of every credit movement (grants, debits, topups, refunds, adjustments). Exposed via `speko.credits`.
+
+Balances are returned in micro-USD (`1_000_000 µ$ = $1`). The SDK also pre-divides to float USD for display.
+
+## `get_balance`
+
+<CodeGroup>
+```python sync
+Speko.credits.get_balance() -> OrganizationBalance
+```
+
+```python async
+await AsyncSpeko.credits.get_balance() -> OrganizationBalance
+```
+</CodeGroup>
+
+Returns the current balance for the caller's organization.
+
+```python
+balance = speko.credits.get_balance()
+if balance.balance_usd < 0.5:
+    print("Top up before running long sessions.")
+```
+
+### `OrganizationBalance`
+
+<ResponseField name="balance_micro_usd" type="string">
+  Current balance in micro-USD, as string for lossless round-trips.
+</ResponseField>
+
+<ResponseField name="balance_usd" type="float" />
+
+<ResponseField name="updated_at" type="string">
+  ISO-8601 timestamp of the last ledger event.
+</ResponseField>
+
+## `get_ledger`
+
+<CodeGroup>
+```python sync
+Speko.credits.get_ledger(
+    *,
+    limit: int | None = None,
+    cursor: str | None = None,
+) -> CreditLedgerPage
+```
+
+```python async
+await AsyncSpeko.credits.get_ledger(
+    *,
+    limit: int | None = None,
+    cursor: str | None = None,
+) -> CreditLedgerPage
+```
+</CodeGroup>
+
+Most-recent-first page of credit movements. Pass `next_cursor` from one response back in as `cursor` to fetch the next page; `next_cursor is None` means the history is exhausted.
+
+```python
+page = speko.credits.get_ledger(limit=50)
+while True:
+    for entry in page.entries:
+        print(entry.created_at, entry.kind, entry.amount_micro_usd, entry.provider)
+    if page.next_cursor is None:
+        break
+    page = speko.credits.get_ledger(limit=50, cursor=page.next_cursor)
+```
+
+### `CreditLedgerEntry`
+
+<ResponseField name="id" type="string" />
+
+<ResponseField name="kind" type="'grant' | 'debit' | 'topup' | 'refund' | 'adjustment'" />
+
+<ResponseField name="amount_micro_usd" type="string">
+  Signed — positive for grants/topups/refunds, negative for debits. String-encoded to survive JSON for values beyond 2^53.
+</ResponseField>
+
+<ResponseField name="metric" type="string | None">
+  Billable metric when the entry ties to a specific usage row.
+</ResponseField>
+
+<ResponseField name="provider" type="string | None" />
+
+<ResponseField name="session_id" type="string | None">
+  Session the debit was applied against.
+</ResponseField>
+
+<ResponseField name="created_at" type="string" />
+
+### `CreditLedgerPage`
+
+<ResponseField name="entries" type="list[CreditLedgerEntry]" />
+
+<ResponseField name="next_cursor" type="string | None">
+  Cursor for the next page, or `None` when history is exhausted.
+</ResponseField>

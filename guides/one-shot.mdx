@@ -86,12 +86,14 @@ Response:
 }
 ```
 
-## With the SDK
+## With an SDK
 
-The TypeScript SDK wraps all three with the same shape. See [`@spekoai/sdk`](/sdk/overview).
+Both SDKs wrap all three endpoints with matching shapes. See [`@spekoai/sdk`](/sdk/overview) and [`spekoai` (Python)](/sdk-python/overview).
 
-```ts
+<CodeGroup>
+```ts TypeScript
 import { Speko } from '@spekoai/sdk';
+
 const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
 
 const t = await speko.transcribe(buf, { language: 'en-US', vertical: 'general' });
@@ -101,6 +103,20 @@ const c = await speko.complete({
   intent: { language: 'en', vertical: 'general' },
 });
 ```
+
+```python Python
+from spekoai import Speko
+
+speko = Speko(api_key=os.environ["SPEKO_API_KEY"])
+
+t = speko.transcribe(buf, language="en-US", vertical="general")
+a = speko.synthesize("Hello", language="en", vertical="general")
+c = speko.complete(
+    messages=[{"role": "user", "content": "Hi!"}],
+    intent={"language": "en", "vertical": "general"},
+)
+```
+</CodeGroup>
 
 ## When not to use one-shot
 

@@ -3,7 +3,7 @@ title: '@spekoai/sdk'
 description: 'Official TypeScript SDK — one API, every voice provider.'
 ---
 
-`@spekoai/sdk` is the server-side TypeScript SDK for the Speko voice gateway. It wraps three proxy endpoints — `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` — plus a `/v1/usage` reporting endpoint. Speko benchmarks every STT, LLM, and TTS provider per `(language, vertical, optimizeFor)` and routes each call to the best one in real time. Failover is handled server-side. You ship one integration; providers rotate without a code change.
+`@spekoai/sdk` is the server-side TypeScript SDK for the Speko voice gateway. It wraps three proxy endpoints — `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` — a `/v1/usage` reporter, `/v1/credits/*` balance + ledger calls, and a speech-to-speech WebSocket via `POST /v1/sessions` (`mode: 's2s'`). Speko benchmarks every STT, LLM, and TTS provider per `(language, vertical, optimizeFor)` and routes each call to the best one in real time. Failover is handled server-side. You ship one integration; providers rotate without a code change.
 
 ## Install
 
@@ -67,10 +67,32 @@ See [Errors](/sdk/errors) for details.
 
 ## Reference
 
-- [Speko client](/sdk/speko-client) — constructor and options.
-- [transcribe](/sdk/transcribe) — `POST /v1/transcribe`.
-- [synthesize](/sdk/synthesize) — `POST /v1/synthesize`.
-- [complete](/sdk/complete) — `POST /v1/complete`.
-- [usage](/sdk/usage) — `GET /v1/usage`.
-- [Types](/sdk/types) — shared request / response types.
-- [Errors](/sdk/errors) — exception classes.
+<Columns cols={2}>
+  <Card title="Speko client" icon="circle-dot" href="/sdk/speko-client">
+    Constructor, options, concurrency, auth.
+  </Card>
+  <Card title="transcribe" icon="microphone" href="/sdk/transcribe">
+    `POST /v1/transcribe`.
+  </Card>
+  <Card title="synthesize" icon="volume" href="/sdk/synthesize">
+    `POST /v1/synthesize`.
+  </Card>
+  <Card title="complete" icon="brain" href="/sdk/complete">
+    `POST /v1/complete`.
+  </Card>
+  <Card title="realtime" icon="waveform" href="/sdk/realtime">
+    Speech-to-speech WebSocket sessions.
+  </Card>
+  <Card title="usage" icon="chart-line" href="/sdk/usage">
+    `GET /v1/usage`.
+  </Card>
+  <Card title="credits" icon="coin" href="/sdk/credits">
+    Balance and ledger.
+  </Card>
+  <Card title="Types" icon="code" href="/sdk/types">
+    Shared request / response types.
+  </Card>
+  <Card title="Errors" icon="triangle-exclamation" href="/sdk/errors">
+    Exception classes.
+  </Card>
+</Columns>

@@ -1,0 +1,127 @@
+---
+title: 'transcribe'
+description: 'POST /v1/transcribe — speech-to-text with automatic provider routing.'
+---
+
+Transcribe an audio payload. The router picks the best STT provider for your `(language, vertical, optimize_for)` and fails over automatically.
+
+```python
+result = speko.transcribe(
+    audio_bytes,
+    language="es-MX",
+    vertical="healthcare",
+)
+print(result.text, result.provider, result.confidence)
+```
+
+## Signature
+
+<CodeGroup>
+```python sync
+Speko.transcribe(
+    audio: bytes,
+    *,
+    language: str,
+    vertical: Vertical,
+    optimize_for: OptimizeFor | None = None,
+    content_type: str = "audio/wav",
+    constraints: PipelineConstraints | dict | None = None,
+) -> TranscribeResult
+```
+
+```python async
+await AsyncSpeko.transcribe(
+    audio: bytes,
+    *,
+    language: str,
+    vertical: Vertical,
+    optimize_for: OptimizeFor | None = None,
+    content_type: str = "audio/wav",
+    constraints: PipelineConstraints | dict | None = None,
+) -> TranscribeResult
+```
+</CodeGroup>
+
+## Parameters
+
+<ParamField path="audio" type="bytes" required>
+  Raw audio bytes. Providers handle resampling and format conversion — any sample rate works. Wrap `bytearray` / `memoryview` with `bytes(...)` at the call site.
+</ParamField>
+
+<ParamField path="language" type="string" required>
+  BCP-47 language tag, e.g. `"en"`, `"es-MX"`, `"ja-JP"`.
+</ParamField>
+
+<ParamField path="vertical" type="'general' | 'healthcare' | 'finance' | 'legal'" required>
+  Domain bucket the router uses when scoring provider candidates.
+</ParamField>
+
+<ParamField path="optimize_for" type="'balanced' | 'accuracy' | 'latency' | 'cost'">
+  Preset that biases the weighted score. Server default is `balanced`.
+</ParamField>
+
+<ParamField path="content_type" type="string" default="audio/wav">
+  MIME type for the request body.
+</ParamField>
+
+<ParamField path="constraints" type="PipelineConstraints | dict">
+  Allow-list constraints. The router still ranks by score but only considers listed providers.
+</ParamField>
+
+## Returns — `TranscribeResult`
+
+<ResponseField name="text" type="string">
+  Transcribed text.
+</ResponseField>
+
+<ResponseField name="provider" type="string">
+  Upstream provider that ran the request.
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Provider-specific model identifier.
+</ResponseField>
+
+<ResponseField name="confidence" type="float | None">
+  Model-reported confidence when available.
+</ResponseField>
+
+<ResponseField name="failover_count" type="int">
+  Number of providers tried before this one succeeded.
+</ResponseField>
+
+<ResponseField name="scores_run_id" type="string | None">
+  ID of the scoring run that selected this provider — useful for joining to benchmark data.
+</ResponseField>
+
+## Example — non-default MIME + allow-list
+
+```python
+from pathlib import Path
+
+from spekoai import AllowedProviders, PipelineConstraints, Speko
+
+speko = Speko(api_key="sk_live_...")
+
+audio = Path("call.ogg").read_bytes()
+result = speko.transcribe(
+    audio,
+    language="en",
+    vertical="general",
+    optimize_for="accuracy",
+    content_type="audio/ogg",
+    constraints=PipelineConstraints(
+        allowed_providers=AllowedProviders(stt=["deepgram", "assemblyai"]),
+    ),
+)
+```
+
+## Wire format
+
+The audio ships as the raw HTTP body. The routing intent and constraints travel in two headers so no server-side re-parsing of the body is needed:
+
+- `Content-Type`: value of `content_type` (default `audio/wav`).
+- `X-Speko-Intent`: compact JSON `{"language", "vertical", "optimizeFor"?}`.
+- `X-Speko-Constraints`: compact JSON when `constraints` is set.
+
+The response is a JSON `TranscribeResult`.

@@ -3,30 +3,53 @@ title: 'Errors'
 description: 'Typed exceptions raised by the Python SDK.'
 ---
 
-All SDK methods raise one of three exceptions on non-2xx HTTP responses.
-
-| Exception | When | Attributes |
-| --- | --- | --- |
-| `SpekoAuthError` | `401` from the API | `message` |
-| `SpekoRateLimitError` | `429` from the API | `message`, `retry_after` (seconds, optional) |
-| `SpekoApiError` | any other non-2xx | `message`, `status`, `code` |
+Every non-2xx API response is raised as a typed exception. Import from the package root:
 
 ```python
-from spekoai import SpekoAI, SpekoAuthError, SpekoRateLimitError, SpekoApiError
-
-speko = SpekoAI(api_key="sk_live_...")
-
-try:
-    speko.sessions.create(pipeline=...)
-except SpekoAuthError:
-    # API key bad / revoked. Don't retry.
-    raise
-except SpekoRateLimitError as e:
-    # Backoff and retry.
-    sleep(e.retry_after or 1)
-except SpekoApiError as e:
-    # Generic upstream failure. Inspect e.status, e.code.
-    log.exception("speko call failed: %s (%s)", e.code, e.status)
+from spekoai import SpekoApiError, SpekoAuthError, SpekoRateLimitError
 ```
 
-`message` and `code` are extracted from the JSON error body when present; otherwise from `response.text` and a fallback `"UNKNOWN"`.
+| Exception             | When                     | Attributes                                          |
+| --------------------- | ------------------------ | --------------------------------------------------- |
+| `SpekoAuthError`      | HTTP `401`               | `message`, `status=401`, `code="AUTH_ERROR"`        |
+| `SpekoRateLimitError` | HTTP `429`               | `message`, `status=429`, `code="RATE_LIMITED"`, `retry_after: int \| None` |
+| `SpekoApiError`       | any other non-2xx        | `message`, `status`, `code`                         |
+
+`message` and `code` are parsed from the JSON error body when present (`{"error": "...", "code": "..."}`); otherwise they fall back to `response.text` and `"UNKNOWN"`.
+
+## Example — targeted handling
+
+```python
+import time
+
+from spekoai import Speko, SpekoApiError, SpekoAuthError, SpekoRateLimitError
+
+speko = Speko(api_key="sk_live_...")
+
+try:
+    speko.complete(
+        messages=[{"role": "user", "content": "Hi"}],
+        intent={"language": "en", "vertical": "general"},
+    )
+except SpekoAuthError:
+    raise
+except SpekoRateLimitError as err:
+    time.sleep(err.retry_after or 1)
+except SpekoApiError as err:
+    log.exception("speko call failed: %s (%s)", err.code, err.status)
+```
+
+<Note>
+  `SpekoAuthError` and `SpekoRateLimitError` both inherit from `SpekoApiError`, so a bare `except SpekoApiError` catches all three. Always branch from most specific to most general.
+</Note>
+
+## Realtime errors
+
+`connect_realtime` raises the same three exceptions from the initial `POST /v1/sessions` call. Once the WebSocket is open, transport failures surface as frames with `type == "error"`:
+
+```python
+async for frame in session:
+    if frame["type"] == "error":
+        log.error("realtime: %s — %s", frame["code"], frame["message"])
+        break
+```

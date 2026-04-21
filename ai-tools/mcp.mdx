@@ -1,58 +1,103 @@
 ---
 title: 'spekoai-mcp'
-description: 'Model Context Protocol server exposing Speko tools to Claude, Cursor, and other MCP clients.'
+description: 'Model Context Protocol server exposing Speko docs, scaffolds, and balance tools to Claude, Cursor, and other MCP clients.'
 ---
 
-`spekoai-mcp` is a [FastMCP](https://gofastmcp.com)-based MCP server that lets MCP-aware clients call Speko on behalf of the authenticated user. Each tool call forwards the caller's OAuth access token to the Speko API — there is no shared server-wide credential.
+`spekoai-mcp` is a [FastMCP v3](https://gofastmcp.com) server that makes Speko's SDKs, skill sheets, and balance queries available to any MCP-aware agent. The knowledge surface (bundled docs, scaffold prompts, recommendation tool) is public; action tools like `get_balance` forward the caller's OAuth access token to the Speko API, so there is no shared server-wide credential.
 
-## Install
+A hosted instance lives at [`https://mcp.speko.ai`](https://mcp.speko.ai). You can also run it locally.
 
-```bash
-pip install spekoai-mcp
-# or
-uv tool install spekoai-mcp
-```
+## Connect a client
 
-Python 3.10+.
-
-## Run
-
-```bash
-spekoai-mcp
-```
-
-The server speaks MCP over stdio by default. Configure your MCP client to launch it.
-
-## Configure Claude Desktop
-
-`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
+<CodeGroup>
+```json Claude Desktop
 {
   "mcpServers": {
     "spekoai": {
-      "command": "spekoai-mcp"
+      "url": "https://mcp.speko.ai/mcp"
     }
   }
 }
 ```
 
-Restart Claude. The Speko tools appear in the tool picker.
+```json Cursor
+{
+  "mcpServers": {
+    "spekoai": {
+      "url": "https://mcp.speko.ai/mcp"
+    }
+  }
+}
+```
 
-## Configure Cursor
+```bash local
+pip install spekoai-mcp
+spekoai-mcp                     # HTTP on 0.0.0.0:8080
+spekoai-mcp --host 127.0.0.1 --port 9000
+```
+</CodeGroup>
 
-In Cursor settings, add an MCP server entry pointing at the `spekoai-mcp` binary. Tool calls are routed through Cursor's MCP transport.
+Python 3.10+. The server speaks MCP over HTTP; configure your client to hit the `/mcp` path.
 
-## Available tools
+## Surfaces
 
-The MCP tool surface mirrors the Python SDK exactly. v1 ships:
+### Tools
 
-- `get_usage_summary(from_date?, to_date?)` — returns `UsageSummary` for the requested range.
+| Tool                 | Description                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_docs`        | Full-text search over every bundled Speko doc. Returns `slug`, `title`, `score`, `snippet`. Each `slug` is readable at `spekoai://docs/{slug}`. |
+| `list_packages`      | Structured manifest of every Speko package with URIs to its README and SKILLS sheet.                                                   |
+| `recommended_stack`  | Opinionated stack for one Speko vertical (`general`, `healthcare`, `finance`, `legal`). Returns packages, tagline, compliance warnings. |
+| `scaffold_voice_app` | Next.js App Router scaffold manifest for a browser voice app. Emits four files, install commands, and env vars.                       |
+| `get_balance`        | Caller's current prepaid credit balance. Forwards the OAuth access token to `api.speko.ai/v1/credits/balance`. Requires OAuth.         |
 
-More tools land as the SDK grows. The MCP server intentionally never exposes a tool the SDK doesn't already expose — keeps the contract honest.
+### Resources
 
-## Auth
+Bundled product docs, readable at `spekoai://docs/{slug}`. Start with `spekoai://docs/index` for a slug listing.
 
-The server requires OAuth. On startup it expects an `OAuthProxy` configuration; callers authenticate via the standard MCP OAuth handshake. The resulting access token is the same one you'd use as `Authorization: Bearer <token>` against the Speko REST API directly.
+Skill sheets (`*-skills`) are dense, LLM-oriented references with API surfaces, minimal snippets, and common gotchas. READMEs (`*-readme`) are the longer prose walkthroughs.
 
-For local-only use without OAuth, set `SPEKOAI_BASE_URL` to a local Speko instance and run with auth disabled per FastMCP docs.
+<Note>
+  Only public, user-facing packages are bundled. Internal packages (`@spekoai/core`, `@spekoai/providers`), the monorepo-level `CLAUDE.md`, and per-package `ROADMAP.md` files are excluded on purpose — they cover internal architecture or forward-looking direction.
+</Note>
+
+### Components
+
+Copy-paste client snippets exposed over MCP with `text/plain` mime so clients don't mangle them during re-emission.
+
+- `spekoai://components/react/voice-session` — `<SpekoVoiceSession>` React component wrapping `@spekoai/client`. Marked `'use client'` for Next.js App Router; dynamic-imports the SDK so it stays out of the SSR bundle.
+
+### Prompts
+
+| Prompt              | Args                                                                             | Description                                                                    |
+| ------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `scaffold_project`  | `scenario`, `language?`, `runtime?`                                              | Step-by-step scaffold guide. Scenarios: `voice_conversation`, `batch_transcribe`, `livekit_agent`, `quickstart`. `voice_conversation` and `livekit_agent` are TypeScript-only. |
+
+## Auth model
+
+The server holds no long-lived Speko credential. Action tools forward the caller's OAuth access token — minted by the Speko platform's Better Auth OAuth provider — straight to the Speko API, which validates the JWT and scopes the call to that user and org.
+
+With OAuth configured, an MCP client mints an access token, FastMCP's `OAuthProxy` verifies it, and tools like `get_balance` relay the same JWT to `api.speko.ai` via `Authorization: Bearer <token>`.
+
+With OAuth unconfigured the server still boots — the knowledge surface stays public — but `get_balance` raises a `ToolError` instructing the caller to set the four required env vars.
+
+## Self-hosting
+
+```bash
+uv run spekoai-mcp
+```
+
+To enable OAuth-gated tools, set these env vars before launching:
+
+| Variable                      | Required? | Description                                                                                          |
+| ----------------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
+| `SPEKOAI_OAUTH_ISSUER`        | yes       | Must end in `/oauth2`, e.g. `https://platform.speko.ai/api/auth/oauth2`.                             |
+| `SPEKOAI_OAUTH_CLIENT_ID`     | yes       | OAuth client id registered against the platform.                                                     |
+| `SPEKOAI_OAUTH_CLIENT_SECRET` | yes       | Returned once at registration time; store durably.                                                   |
+| `SPEKOAI_MCP_BASE_URL`        | yes       | Public URL of this server — used as the MCP resource URL (RFC 8707).                                 |
+| `SPEKOAI_OAUTH_AUDIENCE`      | no        | Defaults to `${SPEKOAI_MCP_BASE_URL}/mcp`. Must also appear in the platform's audience allow-list.   |
+| `SPEKOAI_BASE_URL`            | no        | Upstream override, defaults to `https://api.speko.ai`.                                               |
+
+<Warning>
+  If any of the four required vars are set, they must all be set — `build_auth()` rejects partial configs at startup.
+</Warning>

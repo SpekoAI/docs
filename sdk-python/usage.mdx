@@ -1,37 +1,93 @@
 ---
 title: 'usage'
-description: 'Query usage summary for the current billing period.'
+description: 'GET /v1/usage — billing and usage reporting.'
 ---
 
+Usage summary for the current billing period. Exposed via `speko.usage`.
+
 ```python
-speko.usage.get(from_date=None, to_date=None) -> UsageSummary
+summary = speko.usage.get()
+print(summary.total_sessions, summary.total_minutes, summary.total_cost)
+print(summary.balance_usd)
 ```
 
-## get
+## Signature
+
+<CodeGroup>
+```python sync
+Speko.usage.get(
+    *,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> UsageSummary
+```
+
+```python async
+await AsyncSpeko.usage.get(
+    *,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> UsageSummary
+```
+</CodeGroup>
+
+Both parameters accept ISO-8601 dates or datetimes. Omit either to default to the current billing period.
+
+## Returns — `UsageSummary`
+
+<ResponseField name="total_sessions" type="int" />
+<ResponseField name="total_minutes" type="float" />
+<ResponseField name="total_cost" type="float">
+  Total cost in USD over the range.
+</ResponseField>
+
+<ResponseField name="breakdown" type="list[UsageByProvider]">
+  Per-provider rollup — see below.
+</ResponseField>
+
+<ResponseField name="balance_micro_usd" type="string">
+  Current organization balance in micro-USD (`1_000_000 µ$ = $1`), serialized as string so values beyond 2^53 survive JSON. Use `int(summary.balance_micro_usd)` when you need to do math.
+</ResponseField>
+
+<ResponseField name="balance_usd" type="float">
+  Same balance, pre-divided for display convenience.
+</ResponseField>
+
+### `UsageByProvider`
+
+<ResponseField name="provider" type="string" />
+
+<ResponseField name="type" type="'stt' | 'llm' | 'tts'">
+  Modality.
+</ResponseField>
+
+<ResponseField name="metric" type="string">
+  Billable unit (e.g. `minutes`, `characters`, `tokens`).
+</ResponseField>
+
+<ResponseField name="key_source" type="'BYOK' | 'MANAGED'">
+  `BYOK` = customer key, no Speko margin. `MANAGED` = platform key, billed to the org.
+</ResponseField>
+
+<ResponseField name="quantity" type="float" />
+
+<ResponseField name="cost" type="float">
+  Cost in USD for this row.
+</ResponseField>
+
+## Example — last 24 hours
 
 ```python
-from spekoai import SpekoAI
+from datetime import datetime, timedelta, timezone
 
-speko = SpekoAI(api_key="sk_live_...")
+now = datetime.now(timezone.utc)
+yesterday = now - timedelta(hours=24)
 
-summary = speko.usage.get(from_date="2026-04-01", to_date="2026-04-15")
+summary = speko.usage.get(
+    from_date=yesterday.isoformat(),
+    to_date=now.isoformat(),
+)
 
-summary.total_sessions    # int
-summary.total_minutes     # int
-summary.total_cost        # float
 for row in summary.breakdown:
-    row.provider          # "deepgram" | "openai" | ...
-    row.type              # "stt" | "llm" | "tts"
-    row.metric            # "stt_seconds" | "tts_characters" | "llm_tokens"
-    row.quantity          # int
-    row.cost              # float
-```
-
-Both `from_date` and `to_date` accept ISO-8601 dates or datetimes. Omit either to default to the current billing period.
-
-## Async equivalent
-
-```python
-async with AsyncSpekoAI(api_key="sk_live_...") as speko:
-    summary = await speko.usage.get(from_date="2026-04-01")
+    print(f"{row.type}\t{row.provider}\t{row.quantity}{row.metric}\t${row.cost}")
 ```
