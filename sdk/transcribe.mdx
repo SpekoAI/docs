@@ -3,12 +3,11 @@ title: 'transcribe'
 description: 'POST /v1/transcribe — speech-to-text with automatic provider routing.'
 ---
 
-Transcribe an audio payload. The router picks the best STT provider for your `(language, vertical, optimizeFor)` and fails over automatically.
+Transcribe an audio payload. The router picks the best STT provider for your `(language, optimizeFor)` and fails over automatically.
 
 ```ts
 const { text, provider, confidence } = await speko.transcribe(audio, {
   language: 'es-MX',
-  vertical: 'healthcare',
 });
 ```
 
@@ -35,7 +34,6 @@ Extends [`RoutingIntent`](/sdk/types#routingintent):
 | Field           | Type                                           | Description                                                                          |
 | --------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `language`      | `string` (BCP-47)                              | e.g. `"en"`, `"es-MX"`, `"ja-JP"`.                                                   |
-| `vertical`      | `'general' \| 'healthcare' \| 'finance' \| 'legal'` | Vertical label used by the router.                                                   |
 | `optimizeFor`   | `'balanced' \| 'accuracy' \| 'latency' \| 'cost'?` | Bias the weighted score. Defaults to the server-side default (currently `balanced`). |
 | `contentType`   | `string?`                                      | MIME type for the body. Defaults to `audio/wav`.                                     |
 | `constraints`   | `PipelineConstraints?`                         | Allow-list constraints (see [Types](/sdk/types#pipelineconstraints)).                |
@@ -62,7 +60,7 @@ Cancel an in-flight request. Composed with the client-level timeout.
 The SDK sends the audio as the raw HTTP body with:
 
 - `Content-Type`: from `options.contentType` (default `audio/wav`).
-- `X-Speko-Intent`: JSON-serialized `{ language, vertical, optimizeFor? }`.
+- `X-Speko-Intent`: JSON-serialized `{ language, optimizeFor? }`.
 - `X-Speko-Constraints`: JSON-serialized `options.constraints` (only if set).
 
 The response is a JSON `TranscribeResult`.
@@ -75,7 +73,6 @@ import { readFile } from 'node:fs/promises';
 const audio = await readFile('./call.ogg');
 const result = await speko.transcribe(audio, {
   language: 'en',
-  vertical: 'general',
   contentType: 'audio/ogg',
   optimizeFor: 'accuracy',
 });
@@ -86,7 +83,6 @@ const result = await speko.transcribe(audio, {
 ```ts
 const result = await speko.transcribe(audio, {
   language: 'en',
-  vertical: 'healthcare',
   constraints: {
     allowedProviders: { stt: ['deepgram', 'assemblyai'] },
   },

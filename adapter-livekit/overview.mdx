@@ -42,7 +42,7 @@ export default defineAgent({
     const { stt, llm, tts } = createSpekoComponents({
       speko,
       vad,
-      intent: { language: 'en-US', vertical: 'general', optimizeFor: 'balanced' },
+      intent: { language: 'en-US', optimizeFor: 'balanced' },
     });
 
     const session = new voice.AgentSession({ vad, stt, llm, tts });

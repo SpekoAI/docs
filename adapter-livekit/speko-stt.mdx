@@ -3,7 +3,7 @@ title: 'SpekoSTT'
 description: 'LiveKit Agents STT adapter backed by POST /v1/transcribe.'
 ---
 
-`SpekoSTT` is a `stt.STT` implementation. It encodes each utterance's audio frames into a WAV payload and uploads it to the Speko proxy. The router picks the best STT provider for your `(language, vertical, optimizeFor)` and handles failover.
+`SpekoSTT` is a `stt.STT` implementation. It encodes each utterance's audio frames into a WAV payload and uploads it to the Speko proxy. The router picks the best STT provider for your `(language, optimizeFor)` and handles failover.
 
 ```ts
 import { SpekoSTT } from '@spekoai/adapter-livekit';
@@ -11,7 +11,7 @@ import { stt as sttNs } from '@livekit/agents';
 
 const spekoSTT = new SpekoSTT({
   speko,
-  intent: { language: 'en-US', vertical: 'general' },
+  intent: { language: 'en-US' },
 });
 
 const wrapped = new sttNs.StreamAdapter(spekoSTT, vad);

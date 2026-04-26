@@ -26,7 +26,7 @@ app.post('/api/conversations', async (req, res) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      intent: { language: 'en-US', vertical: 'general' },
+      intent: { language: 'en-US' },
       systemPrompt: 'You are a helpful voice assistant.',
       voice: undefined,                  // let routing pick
       ttlSeconds: 900,                   // default

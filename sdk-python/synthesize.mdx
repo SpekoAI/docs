@@ -3,13 +3,12 @@ title: 'synthesize'
 description: 'POST /v1/synthesize — text-to-speech with automatic provider routing.'
 ---
 
-Synthesize text into audio. The router picks the best TTS provider for your `(language, vertical, optimize_for)` and fails over automatically.
+Synthesize text into audio. The router picks the best TTS provider for your `(language, optimize_for)` and fails over automatically.
 
 ```python
 speech = speko.synthesize(
     "Hello world",
     language="en",
-    vertical="general",
 )
 Path("out.mp3").write_bytes(speech.audio)
 ```
@@ -22,7 +21,6 @@ Speko.synthesize(
     text: str,
     *,
     language: str,
-    vertical: Vertical,
     optimize_for: OptimizeFor | None = None,
     voice: str | None = None,
     speed: float | None = None,
@@ -35,7 +33,6 @@ await AsyncSpeko.synthesize(
     text: str,
     *,
     language: str,
-    vertical: Vertical,
     optimize_for: OptimizeFor | None = None,
     voice: str | None = None,
     speed: float | None = None,
@@ -53,8 +50,6 @@ await AsyncSpeko.synthesize(
 <ParamField path="language" type="string" required>
   BCP-47 language tag.
 </ParamField>
-
-<ParamField path="vertical" type="'general' | 'healthcare' | 'finance' | 'legal'" required />
 
 <ParamField path="optimize_for" type="'balanced' | 'accuracy' | 'latency' | 'cost'" />
 
@@ -97,7 +92,6 @@ from pathlib import Path
 speech = speko.synthesize(
     "Welcome to the clinic.",
     language="en",
-    vertical="healthcare",
     voice="sonic-english",
 )
 
@@ -113,7 +107,6 @@ from spekoai import AllowedProviders, PipelineConstraints
 speech = speko.synthesize(
     "Hello",
     language="en",
-    vertical="general",
     constraints=PipelineConstraints(
         allowed_providers=AllowedProviders(tts=["cartesia"]),
     ),

@@ -29,7 +29,7 @@ speko = Speko(api_key="sk_live_...")
 try:
     speko.complete(
         messages=[{"role": "user", "content": "Hi"}],
-        intent={"language": "en", "vertical": "general"},
+        intent={"language": "en"},
     )
 except SpekoAuthError:
     raise

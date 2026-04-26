@@ -19,7 +19,7 @@ Authorization: Bearer sk_live_...
 curl -X POST https://api.speko.dev/v1/transcribe \
   -H "Authorization: Bearer $SPEKO_API_KEY" \
   -H "Content-Type: audio/wav" \
-  -H "x-speko-intent: {\"language\":\"en-US\",\"vertical\":\"general\"}" \
+  -H "x-speko-intent: {\"language\":\"en-US\"}" \
   --data-binary @call.wav
 ```
 
@@ -49,7 +49,7 @@ curl -X POST https://api.speko.dev/v1/synthesize \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Hello, world.",
-    "intent": { "language": "en-US", "vertical": "general" },
+    "intent": { "language": "en-US" },
     "voice": null,
     "speed": 1
   }' \
@@ -69,7 +69,7 @@ curl -X POST https://api.speko.dev/v1/complete \
       { "role": "system", "content": "You are concise." },
       { "role": "user", "content": "Hi!" }
     ],
-    "intent": { "language": "en", "vertical": "general" }
+    "intent": { "language": "en" }
   }'
 ```
 
@@ -96,11 +96,11 @@ import { Speko } from '@spekoai/sdk';
 
 const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY! });
 
-const t = await speko.transcribe(buf, { language: 'en-US', vertical: 'general' });
-const a = await speko.synthesize('Hello', { language: 'en', vertical: 'general' });
+const t = await speko.transcribe(buf, { language: 'en-US' });
+const a = await speko.synthesize('Hello', { language: 'en' });
 const c = await speko.complete({
   messages: [{ role: 'user', content: 'Hi!' }],
-  intent: { language: 'en', vertical: 'general' },
+  intent: { language: 'en' },
 });
 ```
 
@@ -109,11 +109,11 @@ from spekoai import Speko
 
 speko = Speko(api_key=os.environ["SPEKO_API_KEY"])
 
-t = speko.transcribe(buf, language="en-US", vertical="general")
-a = speko.synthesize("Hello", language="en", vertical="general")
+t = speko.transcribe(buf, language="en-US")
+a = speko.synthesize("Hello", language="en")
 c = speko.complete(
     messages=[{"role": "user", "content": "Hi!"}],
-    intent={"language": "en", "vertical": "general"},
+    intent={"language": "en"},
 )
 ```
 </CodeGroup>

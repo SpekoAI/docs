@@ -47,7 +47,7 @@ Python 3.10+. The server speaks MCP over HTTP; configure your client to hit the 
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_docs`        | Full-text search over every bundled Speko doc. Returns `slug`, `title`, `score`, `snippet`. Each `slug` is readable at `spekoai://docs/{slug}`. |
 | `list_packages`      | Structured manifest of every Speko package with URIs to its README and SKILLS sheet.                                                   |
-| `recommended_stack`  | Opinionated stack for one Speko vertical (`general`, `healthcare`, `finance`, `legal`). Returns packages, tagline, compliance warnings. |
+| `recommended_stack`  | Opinionated stack for one Speko use case (`general`, `healthcare`, `finance`, `legal`). Returns packages, tagline, compliance warnings. |
 | `scaffold_voice_app` | Next.js App Router scaffold manifest for a browser voice app. Emits four files, install commands, and env vars.                       |
 | `get_balance`        | Caller's current prepaid credit balance. Forwards the OAuth access token to `api.speko.ai/v1/credits/balance`. Requires OAuth.         |
 

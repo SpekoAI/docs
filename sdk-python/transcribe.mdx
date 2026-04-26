@@ -3,13 +3,12 @@ title: 'transcribe'
 description: 'POST /v1/transcribe — speech-to-text with automatic provider routing.'
 ---
 
-Transcribe an audio payload. The router picks the best STT provider for your `(language, vertical, optimize_for)` and fails over automatically.
+Transcribe an audio payload. The router picks the best STT provider for your `(language, optimize_for)` and fails over automatically.
 
 ```python
 result = speko.transcribe(
     audio_bytes,
     language="es-MX",
-    vertical="healthcare",
 )
 print(result.text, result.provider, result.confidence)
 ```
@@ -22,7 +21,6 @@ Speko.transcribe(
     audio: bytes,
     *,
     language: str,
-    vertical: Vertical,
     optimize_for: OptimizeFor | None = None,
     content_type: str = "audio/wav",
     constraints: PipelineConstraints | dict | None = None,
@@ -34,7 +32,6 @@ await AsyncSpeko.transcribe(
     audio: bytes,
     *,
     language: str,
-    vertical: Vertical,
     optimize_for: OptimizeFor | None = None,
     content_type: str = "audio/wav",
     constraints: PipelineConstraints | dict | None = None,
@@ -50,10 +47,6 @@ await AsyncSpeko.transcribe(
 
 <ParamField path="language" type="string" required>
   BCP-47 language tag, e.g. `"en"`, `"es-MX"`, `"ja-JP"`.
-</ParamField>
-
-<ParamField path="vertical" type="'general' | 'healthcare' | 'finance' | 'legal'" required>
-  Domain bucket the router uses when scoring provider candidates.
 </ParamField>
 
 <ParamField path="optimize_for" type="'balanced' | 'accuracy' | 'latency' | 'cost'">
@@ -107,7 +100,6 @@ audio = Path("call.ogg").read_bytes()
 result = speko.transcribe(
     audio,
     language="en",
-    vertical="general",
     optimize_for="accuracy",
     content_type="audio/ogg",
     constraints=PipelineConstraints(
@@ -121,7 +113,7 @@ result = speko.transcribe(
 The audio ships as the raw HTTP body. The routing intent and constraints travel in two headers so no server-side re-parsing of the body is needed:
 
 - `Content-Type`: value of `content_type` (default `audio/wav`).
-- `X-Speko-Intent`: compact JSON `{"language", "vertical", "optimizeFor"?}`.
+- `X-Speko-Intent`: compact JSON `{"language", "optimizeFor"?}`.
 - `X-Speko-Constraints`: compact JSON when `constraints` is set.
 
 The response is a JSON `TranscribeResult`.

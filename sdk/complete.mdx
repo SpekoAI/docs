@@ -8,7 +8,7 @@ Run an LLM completion. The router picks the best LLM provider for your intent an
 ```ts
 const { text, provider } = await speko.complete({
   messages: [{ role: 'user', content: 'Hi!' }],
-  intent: { language: 'en', vertical: 'general' },
+  intent: { language: 'en' },
 });
 ```
 
@@ -28,7 +28,7 @@ speko.complete(
 | Field           | Type                           | Description                                                                |
 | --------------- | ------------------------------ | -------------------------------------------------------------------------- |
 | `messages`      | `ChatMessage[]`                | Conversation history. Roles: `system`, `user`, `assistant`.                |
-| `intent`        | `RoutingIntent`                | `language`, `vertical`, optional `optimizeFor`.                            |
+| `intent`        | `RoutingIntent`                | `language`, optional `optimizeFor`.                                        |
 | `systemPrompt`  | `string?`                      | Shortcut for a leading system message. Providers that distinguish the system channel use it natively; others fold it into the message list. |
 | `temperature`   | `number?`                      | Forwarded to the provider. Defaults to the provider's default.             |
 | `maxTokens`     | `number?`                      | Max completion tokens. Defaults to the provider's default.                 |
@@ -75,7 +75,7 @@ const messages: ChatMessage[] = [
 
 const first = await speko.complete({
   messages,
-  intent: { language: 'en', vertical: 'healthcare' },
+  intent: { language: 'en' },
   temperature: 0.3,
   maxTokens: 200,
 });
@@ -85,7 +85,7 @@ messages.push({ role: 'user',      content: '3pm, with Dr. Chen.' });
 
 const second = await speko.complete({
   messages,
-  intent: { language: 'en', vertical: 'healthcare' },
+  intent: { language: 'en' },
 });
 ```
 
@@ -94,7 +94,7 @@ const second = await speko.complete({
 ```ts
 await speko.complete({
   messages: [...],
-  intent: { language: 'en', vertical: 'finance' },
+  intent: { language: 'en' },
   constraints: { allowedProviders: { llm: ['anthropic'] } },
 });
 ```

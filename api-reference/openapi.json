@@ -60,7 +60,7 @@
     "/v1/transcribe": {
       "post": {
         "summary": "Transcribe audio (speech to text)",
-        "description": "Routes the request to the best STT provider for your `(language, vertical, optimizeFor)` intent, with automatic failover to runner-up providers. Body is binary audio. Routing intent goes in the `x-speko-intent` header (JSON).",
+        "description": "Routes the request to the best STT provider for your `(language, optimizeFor)` intent, with automatic failover to runner-up providers. Body is binary audio. Routing intent goes in the `x-speko-intent` header (JSON).",
         "operationId": "transcribe",
         "tags": ["Voice"],
         "parameters": [
@@ -69,7 +69,7 @@
             "name": "x-speko-intent",
             "required": true,
             "schema": { "type": "string" },
-            "description": "JSON-encoded `RoutingIntent`. Example: `{\"language\":\"en-US\",\"vertical\":\"general\"}`."
+            "description": "JSON-encoded `RoutingIntent`. Example: `{\"language\":\"en-US\"}`."
           },
           {
             "in": "header",
@@ -206,18 +206,13 @@
     "schemas": {
       "RoutingIntent": {
         "type": "object",
-        "required": ["language", "vertical"],
+        "required": ["language"],
         "properties": {
           "language": {
             "type": "string",
             "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
             "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
             "examples": ["en-US"]
-          },
-          "vertical": {
-            "type": "string",
-            "enum": ["general", "healthcare", "finance", "legal"],
-            "examples": ["general"]
           },
           "optimizeFor": {
             "type": "string",

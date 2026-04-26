@@ -24,7 +24,6 @@
             "group": "Concepts",
             "pages": [
               "concepts/routing",
-              "concepts/verticals",
               "concepts/byok",
               "concepts/failover",
               "concepts/scoring",

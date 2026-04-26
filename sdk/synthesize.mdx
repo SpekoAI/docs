@@ -3,12 +3,11 @@ title: 'synthesize'
 description: 'POST /v1/synthesize — text-to-speech with automatic provider routing.'
 ---
 
-Synthesize text into audio. The router picks the best TTS provider for your `(language, vertical, optimizeFor)` and fails over automatically.
+Synthesize text into audio. The router picks the best TTS provider for your `(language, optimizeFor)` and fails over automatically.
 
 ```ts
 const result = await speko.synthesize('Hello world', {
   language: 'en',
-  vertical: 'general',
 });
 ```
 
@@ -35,7 +34,6 @@ Extends [`RoutingIntent`](/sdk/types#routingintent):
 | Field           | Type                       | Description                                                                                    |
 | --------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
 | `language`      | `string` (BCP-47)          | e.g. `"en"`, `"es-MX"`.                                                                        |
-| `vertical`      | `Vertical`                 | `general`, `healthcare`, `finance`, `legal`.                                                   |
 | `optimizeFor`   | `OptimizeFor?`             | `balanced`, `accuracy`, `latency`, `cost`.                                                     |
 | `voice`         | `string?`                  | Voice id override. The router interprets it per provider (e.g. a Cartesia voice UUID).          |
 | `speed`         | `number?`                  | Speech speed multiplier. Providers vary in what range they accept — `1.0` is always neutral.    |
@@ -65,7 +63,7 @@ The SDK sends `POST /v1/synthesize` with a JSON body:
 ```json
 {
   "text": "Hello world",
-  "intent": { "language": "en", "vertical": "general", "optimizeFor": "latency" },
+  "intent": { "language": "en", "optimizeFor": "latency" },
   "voice": "…",
   "speed": 1.0,
   "constraints": { "allowedProviders": { "tts": ["cartesia"] } }
@@ -81,7 +79,6 @@ import { writeFile } from 'node:fs/promises';
 
 const result = await speko.synthesize('Welcome to the clinic.', {
   language: 'en',
-  vertical: 'healthcare',
   voice: 'sonic-english',
 });
 
@@ -99,7 +96,6 @@ await writeFile(`greeting.${ext}`, result.audio);
 ```ts
 await speko.synthesize('…', {
   language: 'en',
-  vertical: 'general',
   constraints: { allowedProviders: { tts: ['cartesia'] } },
 });
 ```

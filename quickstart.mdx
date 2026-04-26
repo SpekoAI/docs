@@ -22,7 +22,7 @@ Speko uses platform-managed provider credentials by default. To bring your own k
 curl -X POST https://api.speko.dev/v1/transcribe \
   -H "Authorization: Bearer $SPEKO_API_KEY" \
   -H "Content-Type: audio/wav" \
-  -H "x-speko-intent: {\"language\":\"en-US\",\"vertical\":\"general\"}" \
+  -H "x-speko-intent: {\"language\":\"en-US\"}" \
   --data-binary @call.wav
 ```
 
@@ -35,7 +35,6 @@ const audio = await readFile('./call.wav');
 
 const { text, provider, model, confidence } = await speko.transcribe(audio, {
   language: 'en-US',
-  vertical: 'general',
 });
 
 console.log(text, '←', provider, model, confidence);
@@ -50,7 +49,7 @@ from spekoai import Speko
 speko = Speko(api_key=os.environ["SPEKO_API_KEY"])
 audio = Path("call.wav").read_bytes()
 
-result = speko.transcribe(audio, language="en-US", vertical="general")
+result = speko.transcribe(audio, language="en-US")
 print(result.text, "←", result.provider, result.model, result.confidence)
 ```
 </CodeGroup>

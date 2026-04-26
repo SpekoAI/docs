@@ -3,7 +3,7 @@ title: '@spekoai/sdk'
 description: 'Official TypeScript SDK — one API, every voice provider.'
 ---
 
-`@spekoai/sdk` is the server-side TypeScript SDK for the Speko voice gateway. It wraps three proxy endpoints — `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` — a `/v1/usage` reporter, `/v1/credits/*` balance + ledger calls, and a speech-to-speech WebSocket via `POST /v1/sessions` (`mode: 's2s'`). Speko benchmarks every STT, LLM, and TTS provider per `(language, vertical, optimizeFor)` and routes each call to the best one in real time. Failover is handled server-side. You ship one integration; providers rotate without a code change.
+`@spekoai/sdk` is the server-side TypeScript SDK for the Speko voice gateway. It wraps three proxy endpoints — `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` — a `/v1/usage` reporter, `/v1/credits/*` balance + ledger calls, and a speech-to-speech WebSocket via `POST /v1/sessions` (`mode: 's2s'`). Speko benchmarks every STT, LLM, and TTS provider per `(language, optimizeFor)` and routes each call to the best one in real time. Failover is handled server-side. You ship one integration; providers rotate without a code change.
 
 ## Install
 
@@ -29,25 +29,23 @@ const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY });
 const audio = await readFile('./call.wav');
 const { text, provider, confidence } = await speko.transcribe(audio, {
   language: 'es-MX',
-  vertical: 'healthcare',
 });
 
 // Synthesize
 const speech = await speko.synthesize('Hello world', {
   language: 'en',
-  vertical: 'general',
 });
 
 // Complete
 const { text: reply } = await speko.complete({
   messages: [{ role: 'user', content: 'Hi!' }],
-  intent: { language: 'en', vertical: 'general' },
+  intent: { language: 'en' },
 });
 ```
 
 ## What the router does
 
-Every call takes a `RoutingIntent` (`language`, `vertical`, optional `optimizeFor`). Speko scores every provider for that intent against its continuously-updated benchmark set, picks the top-ranked one, and fails over to the next-best if the primary errors. Response headers (`X-Speko-Provider`, `X-Speko-Model`, `X-Speko-Failover-Count`, `X-Speko-Scores-Run-Id`) are surfaced on every result object so you can log what actually ran.
+Every call takes a `RoutingIntent` (`language`, optional `optimizeFor`). Speko scores every provider for that intent against its continuously-updated benchmark set, picks the top-ranked one, and fails over to the next-best if the primary errors. Response headers (`X-Speko-Provider`, `X-Speko-Model`, `X-Speko-Failover-Count`, `X-Speko-Scores-Run-Id`) are surfaced on every result object so you can log what actually ran.
 
 If you need to restrict the pool (for compliance, cost caps, or pinning a provider while debugging), pass `constraints.allowedProviders[modality]`. The router still ranks by score — it just picks the top-ranked candidate from your allow-list.
 

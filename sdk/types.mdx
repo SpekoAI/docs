@@ -9,7 +9,6 @@ All types below are exported from the package root:
 import type {
   SpekoClientOptions,
   KeySource,
-  Vertical,
   OptimizeFor,
   RoutingIntent,
   PipelineConstraints,
@@ -39,14 +38,6 @@ import type {
 
 ## Routing primitives
 
-### `Vertical`
-
-```ts
-type Vertical = 'general' | 'healthcare' | 'finance' | 'legal';
-```
-
-Vertical labels the router uses to pick a provider. Each vertical has its own benchmark set.
-
 ### `OptimizeFor`
 
 ```ts
@@ -60,7 +51,6 @@ Biases the weighted score the router uses to rank candidates. `balanced` is the 
 ```ts
 interface RoutingIntent {
   language: string;       // BCP-47, e.g. "en" or "es-MX"
-  vertical: Vertical;
   optimizeFor?: OptimizeFor;
 }
 ```

@@ -10,7 +10,7 @@ from spekoai import ChatMessage, RoutingIntent
 
 reply = speko.complete(
     messages=[ChatMessage(role="user", content="Hi!")],
-    intent=RoutingIntent(language="en", vertical="general"),
+    intent=RoutingIntent(language="en"),
 )
 print(reply.text, reply.provider, reply.usage.prompt_tokens)
 ```
@@ -50,7 +50,7 @@ await AsyncSpeko.complete(
 </ParamField>
 
 <ParamField path="intent" type="RoutingIntent | dict" required>
-  Routing intent — `language`, `vertical`, optional `optimize_for`.
+  Routing intent — `language`, optional `optimize_for`.
 </ParamField>
 
 <ParamField path="system_prompt" type="string">
@@ -96,7 +96,7 @@ messages = [
 
 first = speko.complete(
     messages=messages,
-    intent={"language": "en", "vertical": "healthcare"},
+    intent={"language": "en"},
     temperature=0.3,
     max_tokens=200,
 )
@@ -106,7 +106,7 @@ messages.append({"role": "user", "content": "3pm, with Dr. Chen."})
 
 second = speko.complete(
     messages=messages,
-    intent={"language": "en", "vertical": "healthcare"},
+    intent={"language": "en"},
 )
 ```
 
@@ -117,7 +117,7 @@ from spekoai import AllowedProviders, PipelineConstraints
 
 reply = speko.complete(
     messages=[{"role": "user", "content": "…"}],
-    intent={"language": "en", "vertical": "finance"},
+    intent={"language": "en"},
     constraints=PipelineConstraints(
         allowed_providers=AllowedProviders(llm=["anthropic"]),
     ),

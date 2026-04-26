@@ -11,7 +11,7 @@ import { createSpekoComponents } from '@spekoai/adapter-livekit';
 const { stt, llm, tts } = createSpekoComponents({
   speko,
   vad,
-  intent: { language: 'en-US', vertical: 'general', optimizeFor: 'balanced' },
+  intent: { language: 'en-US', optimizeFor: 'balanced' },
 });
 
 const session = new voice.AgentSession({ vad, stt, llm, tts });
@@ -71,7 +71,7 @@ Use a longer minimum sentence length if you want fewer, longer TTS calls at the 
 createSpekoComponents({
   speko,
   vad,
-  intent: { language: 'en', vertical: 'healthcare' },
+  intent: { language: 'en' },
   constraints: {
     allowedProviders: {
       stt: ['deepgram'],

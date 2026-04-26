@@ -60,7 +60,7 @@ export default defineAgent({
     const { stt, llm, tts } = createSpekoComponents({
       speko,
       vad,
-      intent: { language: 'en-US', vertical: 'general', optimizeFor: 'balanced' },
+      intent: { language: 'en-US', optimizeFor: 'balanced' },
       // optional: pin providers
       // constraints: { allowedProviders: { tts: ['cartesia'] } },
     });
@@ -100,7 +100,6 @@ const dispatchSchema = z.object({
   sessionId: z.string(),
   intent: z.object({
     language: z.string(),
-    vertical: z.enum(['general', 'healthcare', 'finance', 'legal']),
     optimizeFor: z.enum(['balanced', 'accuracy', 'latency', 'cost']).optional(),
   }),
   constraints: z.any().optional(),

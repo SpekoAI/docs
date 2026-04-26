@@ -3,7 +3,7 @@ title: 'Benchmarks and scoring'
 description: 'How provider scores are computed and refreshed.'
 ---
 
-Provider rankings come from a continuously-running benchmark suite. Each provider/model is scored per `(language, vertical)` on three axes:
+Provider rankings come from a continuously-running benchmark suite. Each provider/model is scored per `language` on three axes:
 
 - **Accuracy** — STT word error rate, LLM eval pass rate, TTS naturalness.
 - **Latency** — p50 / p95 round-trip time from a representative location.
@@ -25,8 +25,8 @@ Production traffic is heterogeneous: Spanish healthcare dictation has different 
 
 ## Inspecting scores
 
-`GET /v1/routing/preview?language=en-US&vertical=healthcare&optimize_for=accuracy` returns the same `SelectedCandidate` shape the router would use, including `runnersUp[].score`. Use it to debug "why did Speko pick X for this intent?".
+`GET /v1/routing/preview?language=en-US&optimize_for=accuracy` returns the same `SelectedCandidate` shape the router would use, including `runnersUp[].score`. Use it to debug "why did Speko pick X for this intent?".
 
 ## Custom benchmarks
 
-Not in v1. The vertical taxonomy is fixed (`general`, `healthcare`, `finance`, `legal`). Reach out if your traffic doesn't fit.
+Not in v1. Reach out if your traffic doesn't fit our published benchmark suite.

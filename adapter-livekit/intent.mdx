@@ -6,7 +6,7 @@ description: 'Routing hint type and construction-time validator.'
 `Intent` is the routing hint every adapter class takes. It's a re-export of `RoutingIntent` from `@spekoai/sdk`, so anything you already have typed as a `RoutingIntent` passes through without conversion.
 
 ```ts
-import type { Intent, OptimizeFor, Vertical } from '@spekoai/adapter-livekit';
+import type { Intent, OptimizeFor } from '@spekoai/adapter-livekit';
 ```
 
 ## Type
@@ -14,7 +14,6 @@ import type { Intent, OptimizeFor, Vertical } from '@spekoai/adapter-livekit';
 ```ts
 type Intent = {
   language: string;      // BCP-47
-  vertical: 'general' | 'healthcare' | 'finance' | 'legal';
   optimizeFor?: 'balanced' | 'accuracy' | 'latency' | 'cost';
 };
 ```
@@ -26,20 +25,19 @@ Throws a descriptive `Error` when the intent is malformed. Called by every adapt
 ```ts
 import { validateIntent } from '@spekoai/adapter-livekit';
 
-validateIntent({ language: 'en-US', vertical: 'general' });
+validateIntent({ language: 'en-US' });
 // ok
 
-validateIntent({ language: '', vertical: 'general' });
+validateIntent({ language: '' });
 // throws: SpekoAdapter: intent.language is required (BCP-47 tag)
 
-validateIntent({ language: 'en', vertical: 'crypto' as any });
-// throws: SpekoAdapter: unknown vertical "crypto". Expected one of: general, healthcare, finance, legal.
+validateIntent({ language: 'en', optimizeFor: 'speed' as any });
+// throws: SpekoAdapter: unknown optimizeFor "speed". Expected one of: balanced, accuracy, latency, cost.
 ```
 
 Validation rules:
 
 - `language` must be a non-empty string.
-- `vertical` must be one of `general`, `healthcare`, `finance`, `legal`.
 - `optimizeFor`, if set, must be one of `balanced`, `accuracy`, `latency`, `cost`.
 
 No BCP-47 syntactic validation beyond "is a non-empty string" — the router accepts short codes (`en`) and region-tagged codes (`es-MX`) and normalises downstream.
@@ -49,7 +47,7 @@ No BCP-47 syntactic validation beyond "is a non-empty string" — the router acc
 The adapter pattern is "one intent per agent session, shared across modalities":
 
 ```ts
-const intent: Intent = { language: 'en-US', vertical: 'healthcare', optimizeFor: 'latency' };
+const intent: Intent = { language: 'en-US', optimizeFor: 'latency' };
 
 const { stt, llm, tts } = createSpekoComponents({ speko, vad, intent });
 ```
