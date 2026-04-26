@@ -3,29 +3,51 @@ title: 'Benchmarks and scoring'
 description: 'How provider scores are computed and refreshed.'
 ---
 
-Provider rankings come from a continuously-running benchmark suite. Each provider/model is scored per `language` on three axes:
+Provider rankings come from a continuously-running benchmark suite. Each provider/model is scored per `(language, region)` on a per-modality basis:
 
-- **Accuracy** — STT word error rate, LLM eval pass rate, TTS naturalness.
-- **Latency** — p50 / p95 round-trip time from a representative location.
-- **Cost** — per-second / per-token / per-character price.
+| Modality | Quality axis | Latency axis | Cost axis |
+| --- | --- | --- | --- |
+| **STT** | Word Error Rate (WER) | TTFP p50 by region | $/min (tier-priced) |
+| **TTS** | Round-trip Character Error Rate (CER) | TTFB p50 by region | $/min (chars-billed providers converted via 900 chars/min) |
+| **LLM** | Quality score | TTFT p50 | Blended $/1M tokens |
+| **S2S** | Task-success % | Tool-call p50 by region | $/min |
 
-A weighted score per `optimizeFor` preset combines the three axes. See [routing](/concepts/routing) for the weights.
+Composites are computed at query time using **min-max-inverted normalization** over the active candidate set after hard filters. Two consequences worth understanding:
+
+- A provider's score is *relative to the rest of the candidates for your intent*, not a fixed ranking. Adding or removing a candidate (via `constraints.allowedProviders`, status changes, or new ingest) can shift everyone's normalized score.
+- Lower-is-better axes (WER, CER, latency, cost) are inverted so higher composite is always better. S2S `task_success_pct` is already higher-is-better and is carried through unchanged.
+
+See [routing](/concepts/routing) for weights per `optimizeFor` preset.
+
+## Provider status
+
+Every benchmark row carries a `status`:
+
+- **`production`** — measured, in good standing. Eligible for routing.
+- **`warned`** — measured, but flagged for a known issue (transcription drift, output instability, etc.). Visible in admin tooling, excluded from routing.
+- **`provisional`** — scaffolded but not yet measured. Visible in admin tooling, excluded from routing.
+
+Hard filters drop `warned` and `provisional` candidates before scoring; they never appear in your `runnersUp` list.
 
 ## Refresh cadence
 
-Benchmarks rerun on a schedule and on every benchmark suite update. The active snapshot is identified by `scoresRunId`, returned with every routing decision. Two calls with identical intent within the same snapshot will route the same way; across snapshots, a re-ranking can move a different provider into the top spot.
+Benchmarks rerun on a schedule and on every benchmark suite update. The active snapshot is identified by `scoresRunId`, returned with every routing decision. Two calls with identical intent within the same snapshot route the same way; across snapshots, a re-ranking can move a different provider into the top spot.
 
 ## Health gating
 
-Providers with a recent error rate above 50% are dropped from candidate selection regardless of score. They re-enter once their error rate recovers.
+Hard filters per modality include latency cutoffs (e.g. STT drops candidates above `max_ttfp_p50_ms = 3000`) and the `status != 'warned'` rule above. These run before normalization, so they don't pull other candidates' relative scores around.
+
+## Routing policy
+
+Weights and hard filters live in code as defaults (`DEFAULT_STT_POLICY`, `DEFAULT_TTS_POLICY`, `DEFAULT_S2S_POLICY`, `DEFAULT_LLM_POLICY`) and can be overridden per `request_type` via the `routing_policy` table. There can be at most one active policy per modality at a time. Policy changes take effect on the next selector refresh — no re-ingest required.
 
 ## Why benchmarks beat a single eval
 
-Production traffic is heterogeneous: Spanish healthcare dictation has different leaders than English casual chat. A static "best STT" decision under-serves anything outside the benchmarked happy path. Speko's routing layer means you get the leader *per call*, not per integration choice.
+Production traffic is heterogeneous: Spanish healthcare dictation has different leaders than English casual chat, and a provider that wins in `us-east4` can lose badly in `asia-southeast1`. A static "best STT" decision under-serves anything outside the benchmarked happy path. Speko's routing layer means you get the leader *per call*, not per integration choice.
 
 ## Inspecting scores
 
-`GET /v1/routing/preview?language=en-US&optimize_for=accuracy` returns the same `SelectedCandidate` shape the router would use, including `runnersUp[].score`. Use it to debug "why did Speko pick X for this intent?".
+`GET /v1/benchmarks/stack?language=en&region=us-east4&optimize_for=accuracy` returns the same ranking the router would use, plus `runnersUp[].score` and `filtered_out[]` (with reasons). Use it to debug "why did Speko pick X for this intent?".
 
 ## Custom benchmarks
 

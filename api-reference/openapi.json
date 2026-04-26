@@ -214,6 +214,12 @@
             "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
             "examples": ["en-US"]
           },
+          "region": {
+            "type": "string",
+            "enum": ["global", "us-east4", "europe-west3", "asia-southeast1"],
+            "default": "global",
+            "description": "Region whose streaming-latency measurements should be used. `global` falls through to batch-mode rows when no per-region data matches."
+          },
           "optimizeFor": {
             "type": "string",
             "enum": ["balanced", "accuracy", "latency", "cost"],
@@ -230,7 +236,8 @@
             "properties": {
               "stt": { "type": "array", "items": { "type": "string" } },
               "llm": { "type": "array", "items": { "type": "string" } },
-              "tts": { "type": "array", "items": { "type": "string" } }
+              "tts": { "type": "array", "items": { "type": "string" } },
+              "s2s": { "type": "array", "items": { "type": "string" } }
             }
           }
         }

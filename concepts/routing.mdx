@@ -3,40 +3,47 @@ title: 'How routing works'
 description: 'Intent + benchmark scores → ranked candidates → live failover. The model behind every Speko call.'
 ---
 
-Speko continuously benchmarks every supported STT, LLM, and TTS provider across language and three performance axes (accuracy, latency, cost). Every API call carries a `RoutingIntent`. The router scores candidates against that intent, picks the top-ranked provider, and falls back through runners-up if the primary fails.
+Speko continuously benchmarks every supported STT, LLM, TTS, and S2S provider across language and region. Every API call carries a `RoutingIntent`. The router applies hard filters, normalizes the surviving candidates against each other, picks the top-ranked provider, and falls back through runners-up if the primary fails.
 
 ## Intent
 
 ```ts
 type RoutingIntent = {
   language: string;          // BCP-47, e.g. "en-US", "es-MX"
+  region?: string;           // 'global' | 'us-east4' | 'europe-west3' | 'asia-southeast1' (default: 'global')
   optimizeFor?: 'balanced' | 'accuracy' | 'latency' | 'cost'; // default: balanced
 };
 ```
 
-`language` is required. `optimizeFor` chooses a weight preset:
+`language` is required. `region` selects which streaming-latency measurements the router uses; it defaults to `'global'`. If a provider only published a `global` row (typical for batch endpoints), Speko falls back to that row when no per-region data matches your intent. The current SDKs send the default — explicit per-region tuning ships via `X-Speko-Intent` directly today and will surface as a first-class SDK option in a follow-up.
 
-| Preset | Accuracy | Latency | Cost |
+`optimizeFor` chooses a weight preset that biases the per-modality composite. Defaults are tuned for production-leaning balance:
+
+| Modality | Quality axis | Latency axis | Cost axis |
 | --- | --- | --- | --- |
-| `balanced` (default) | 0.5 | 0.3 | 0.2 |
-| `accuracy` | 0.8 | 0.15 | 0.05 |
-| `latency` | 0.2 | 0.7 | 0.1 |
-| `cost` | 0.15 | 0.15 | 0.7 |
+| **STT** | WER (lower is better) | TTFP p50 by region | $/min |
+| **TTS** | Round-trip CER | TTFB p50 by region | $/min (chars-billed providers converted via 900 chars/min) |
+| **LLM** | Quality score | TTFT p50 | Blended $/1M tokens |
+| **S2S** | Task-success % (higher is better) | Tool-call p50 by region | $/min |
+
+`balanced` weights for STT/TTS are `0.5 quality / 0.3 latency / 0.2 cost`. S2S is `0.4 / 0.4 / 0.2` (success and turn-latency carry equal weight). LLM is `0.5 / 0.3 / 0.2`. The other presets shift weight toward their named axis.
 
 ## Selection
 
-For each modality (STT / LLM / TTS) the selector:
+For each modality the selector:
 
-1. Filters the benchmark set to providers with data for `language`.
-2. Drops any provider whose recent error rate exceeds 50 %.
-3. Computes a weighted score per candidate using the chosen preset.
-4. Returns a `SelectedCandidate` (`providerId`, `modelId`, `score`) plus an ordered `runnersUp` list.
+1. Filters to providers with measurements for `(language, region)`. If no region-specific row exists, falls back to `region='global'` rows.
+2. Applies hard filters from the active routing policy: e.g. STT drops anything above `max_ttfp_p50_ms = 3000`; all modalities exclude providers with `status='warned'`.
+3. Min-max-inverts each axis over the surviving candidate set, so scores are relative to who's still in the running, not to a fixed scale.
+4. Computes the weighted composite, sorts, and returns the top candidate plus an ordered `runnersUp` list.
 
-Each call also returns a `scoresRunId` — the benchmark snapshot the decision was based on. Useful for audit and bug repro.
+Providers shipping with `status='provisional'` (scaffolded but not measured) and `status='warned'` (measured but flagged unsafe to route to) are visible in the admin UI but excluded from selector output.
+
+Each call returns `scoresRunId` — the benchmark snapshot the decision was based on. Useful for audit and bug repro.
 
 ## Failover
 
-The runners-up are not fallbacks of last resort — they are the next-best provider for your exact intent. If the primary throws, Speko transparently retries the same request against the next candidate. The response includes `failoverCount` (how many providers it tried before one succeeded) and `provider` / `model` (what actually ran).
+The runners-up are the next-best providers for your exact intent. If the primary throws, Speko transparently retries the same request against the next candidate. The response includes `failoverCount` (how many providers it tried before one succeeded) and `provider` / `model` (what actually ran).
 
 If every candidate fails, the call returns `ALL_PROVIDERS_FAILED`.
 
@@ -49,13 +56,14 @@ Pin or restrict the candidate pool per modality:
   "constraints": {
     "allowedProviders": {
       "stt": ["deepgram"],
-      "tts": ["cartesia"]
+      "tts": ["cartesia"],
+      "s2s": ["openai"]
     }
   }
 }
 ```
 
-Speko still ranks by score — it just picks the highest-ranking candidate that's in your allow-list. Use this to:
+Speko still ranks by composite — it just picks the highest-ranking candidate that's in your allow-list. Use this to:
 
 - Pin a provider while debugging.
 - Honor compliance constraints (data residency, BAA coverage).
@@ -63,7 +71,7 @@ Speko still ranks by score — it just picks the highest-ranking candidate that'
 
 ## Preview before you ship
 
-Hit `GET /v1/routing/preview?language=en-US&optimize_for=accuracy` to see what the router would pick, including runners-up and `scoresRunId`. No usage is recorded.
+`GET /v1/benchmarks/stack?language=en&region=us-east4&optimize_for=balanced` returns the current pick per modality plus runners-up, `scoresRunId`, and a `filtered_out[]` list explaining why each excluded candidate was dropped (warned status, missed latency cutoff, missing region data, etc.). No usage is recorded.
 
 ## Headers on every response
 
