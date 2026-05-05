@@ -35,7 +35,8 @@
             "pages": [
               "guides/voice-agent",
               "guides/realtime-conversation",
-              "guides/one-shot"
+              "guides/one-shot",
+              "guides/tool-calling"
             ]
           },
           {
@@ -44,7 +45,8 @@
               "dashboard/byok",
               "dashboard/api-keys",
               "dashboard/usage",
-              "dashboard/team"
+              "dashboard/team",
+              "dashboard/tools"
             ]
           },
           {

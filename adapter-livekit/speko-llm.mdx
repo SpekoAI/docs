@@ -33,6 +33,10 @@ new SpekoLLM(options: SpekoLLMOptions)
 | `temperature`  | `number?`                             |          | Forwarded to `/v1/complete`.                                  |
 | `maxTokens`    | `number?`                             |          | Forwarded to `/v1/complete`.                                  |
 | `constraints`  | `PipelineConstraints?`                |          | Allow-list constraints.                                       |
+| `agentId`      | `string?`                             |          | When set, enables the registered-tools loader. The LLM fetches `GET <apiBaseUrl>/v1/agents/<agentId>/tools` once per session and merges the result with LiveKit's runtime `ToolContext`. Registered tools win on collision. Omit to keep runtime-only behavior. See [tool calling](/guides/tool-calling). |
+| `apiBaseUrl`   | `string?`                             |          | Speko API base URL — required when `agentId` is set.                                                                                                                                                                                |
+| `apiKey`       | `string?`                             |          | Speko API key — required when `agentId` is set.                                                                                                                                                                                     |
+| `onRegisteredToolsError` | `(err: Error) => void?`     |          | Called once if the registered-tools fetch fails. Soft degradation — the call continues with runtime-only tools rather than crashing.                                                                                                |
 
 ## Properties
 

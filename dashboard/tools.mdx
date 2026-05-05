@@ -1,0 +1,45 @@
+---
+title: 'Tools'
+description: 'Register webhook tools your voice agents can invoke mid-call.'
+---
+
+The **Tools** page lets you register webhook tools that voice agents call mid-conversation. Each tool is a (name, description, JSON Schema, webhook URL) tuple stored under your organization. Once registered, any voice session running against your agent can invoke the tool — the model decides when based on the description and the user's request.
+
+For the end-to-end concept and worker wiring, see the [tool calling guide](/guides/tool-calling).
+
+## Registering a tool
+
+Click **Add tool**, fill in the form:
+
+- **Name** — `snake_case`, ≤ 64 chars (`lookup_pet`, `transfer_to_human`, `book_visit`). The model sees this; pick something that reads as a verb-phrase the model will match against the user's intent.
+- **Description** — When to invoke. Be explicit and imperative: *"ALWAYS call this when the user asks about a specific pet by name."* Vague descriptions lead to the model skipping the tool when it should call it, or calling it when it shouldn't.
+- **Parameters (JSON Schema)** — A `type: "object"` schema with required fields. Strict typing produces clean args; loose typing produces garbage. Use `description` on each property — the model reads it.
+- **Webhook URL** — A public HTTPS endpoint you control. Speko rejects HTTP, private/loopback hosts, and known cloud-metadata IPs at registration time.
+
+On save, the dashboard surfaces the **signing secret once**. Copy it into your secrets manager — there's no second chance to see it.
+
+## What's stored
+
+| Field         | Notes                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| `name`        | Unique per `(organization, agentId)`.                                                               |
+| `description` | Up to 1024 chars.                                                                                   |
+| `parameters`  | Stored as JSON. Schema-validation at runtime via Ajv (write-time validation is an upcoming change). |
+| `source.url`  | Public HTTPS only; private hosts rejected at registration.                                          |
+| Signing secret| Encrypted at rest; never returned by the API after creation.                                        |
+
+## Invocation flow
+
+1. A voice session starts. The worker fetches `GET /v1/agents/:agentId/tools` and merges the result with any runtime tools.
+2. Mid-call, the LLM emits a tool call. Speko's executor signs the request body using your secret and POSTs to your `webhook URL`.
+3. Your endpoint returns JSON. The executor folds the response back into the model's next turn.
+4. The agent verbalizes the result.
+
+## Editing and deletion
+
+- **Edit** a tool to update its description, JSON Schema, or webhook URL. The name is locked (renaming would orphan in-flight call references).
+- **Delete** a tool to immediately stop new invocations. In-flight calls already routed will complete normally.
+
+## The `_default` agentId
+
+Today, every tool you register is scoped to the `_default` agentId — a sentinel until per-agent management ships. Voice workers fall back to this agentId by default, so registering against `_default` is the right call until the per-agent workflow lands. The migration to real agentIds preserves all existing tool registrations.
