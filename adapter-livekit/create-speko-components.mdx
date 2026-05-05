@@ -37,6 +37,18 @@ function createSpekoComponents(
 | `sentenceTokenizer` | `tokenize.SentenceTokenizer?`                           |          | Tokenizer for chunking LLM output before TTS. Defaults to `tokenize.basic.SentenceTokenizer`.     |
 | `llm`               | `{ temperature?, maxTokens? }?`                         |          | Tuning forwarded to `/v1/complete`.                                                               |
 | `ttsOptions`        | `{ sampleRate?, speed? }?`                              |          | Output sample rate and speech speed forwarded to `SpekoTTS`.                                      |
+| `agentId`           | `string?`                                               |          | Enables the [registered-tools loader](/guides/tool-calling). When set, the LLM fetches tools registered against `agentId` once per session and merges them with LiveKit's runtime `ToolContext`. Omit to keep runtime-only behavior. |
+| `apiBaseUrl`        | `string?`                                               |          | Speko API base URL — required when `agentId` is set. Match what you passed to the `Speko` client. |
+| `apiKey`            | `string?`                                               |          | Speko API key — required when `agentId` is set.                                                   |
+| `onRegisteredToolsError` | `(err: Error) => void?`                            |          | Called once if the registered-tools fetch fails. Voice session keeps running with runtime-only tools — this is a soft degradation, not a crash. |
+
+## Registered tools
+
+When `agentId`, `apiBaseUrl`, and `apiKey` are all set, `createSpekoComponents` constructs a `RegisteredToolsLoader` for the underlying `SpekoLLM`. The loader fetches `GET <apiBaseUrl>/v1/agents/<agentId>/tools` lazily on the first `chat()` of each session and caches the result for the LLM's lifetime. Voice sessions live for seconds-to-minutes and `chat()` is called many times — re-fetching every turn would be wasteful.
+
+On collision with a runtime tool of the same name, the registered tool wins (it's the customer's authoritative declaration). Fetch failures are non-fatal — the loader returns `undefined` and the agent continues with runtime tools only, calling `onRegisteredToolsError` once.
+
+See the [tool calling guide](/guides/tool-calling) for the full picture.
 
 ## Returns — `SpekoComponents`
 

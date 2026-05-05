@@ -1,0 +1,248 @@
+---
+title: 'Tool calling'
+description: 'Give a Speko voice agent the ability to invoke webhook tools mid-call. Register once in the dashboard, fire from any voice session.'
+---
+
+Tool calling lets the LLM driving your voice session take action: query a database, schedule a visit, transfer to a human. The model decides when to invoke a tool from your prompt; Speko POSTs a [Standard Webhooks](https://www.standardwebhooks.com)-signed request to your endpoint, folds the JSON response back into the model's next turn, and the agent verbalizes the result.
+
+This guide walks through registering a tool, hooking it into a LiveKit-powered voice session, and confirming it fires.
+
+## Architecture
+
+```
+Voice session                 Speko proxy                  Your endpoint
+─────────────                 ───────────                  ─────────────
+LLM emits tool call    ─→   /v1/complete loop      ─→     POST /your/webhook
+                                                          (signed body)
+LLM verbalizes result  ←─   response folded back   ←─     200 + JSON
+```
+
+Three pieces meet:
+
+1. **Your endpoint** — a public HTTPS URL that receives the tool call and returns JSON.
+2. **The Speko dashboard** — where you register the tool (name, description, JSON Schema parameters, your endpoint URL). Speko stores an HMAC signing secret you save once.
+3. **A LiveKit voice session** — the worker fetches your registered tools at session start, exposes them to the LLM, and routes invocations through the executor.
+
+## 1. Build your endpoint
+
+The executor POSTs the LLM-generated arguments as JSON. Whatever you return becomes the model's next observation, so keep responses small and specific.
+
+```ts src/server.ts
+import { Hono } from 'hono';
+
+const PETS: Record<string, unknown> = {
+  luna: { name: 'Luna', species: 'corgi', age: 3, status: 'available' },
+  max: { name: 'Max', species: 'tabby cat', age: 5, status: 'available' },
+};
+
+const app = new Hono();
+
+app.post('/lookup', async (c) => {
+  const { name } = (await c.req.json()) as { name?: string };
+  const pet = PETS[String(name ?? '').toLowerCase().trim()];
+  if (!pet) return c.json({ error: 'Pet not found' }, 404);
+  return c.json(pet);
+});
+
+export default { port: Number(process.env.PORT ?? 8080), fetch: app.fetch };
+```
+
+Deploy this anywhere with a public HTTPS URL — Cloud Run, Fly.io, Render, Vercel functions.
+
+### Verifying the signature
+
+Production endpoints MUST verify the [Standard Webhooks](https://www.standardwebhooks.com) signature on every request. Speko sends three headers:
+
+| Header                 | Meaning                                                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webhook-id`           | Idempotency key for this delivery. Skip duplicates.                                                                                                                              |
+| `webhook-timestamp`    | Unix seconds when Speko signed the body. Reject anything older than ~5 minutes to prevent replay.                                                                                |
+| `webhook-signature`    | `v1,<base64(HMAC-SHA256("{webhook-id}.{webhook-timestamp}.{body}", secret))>`. Multiple comma-separated signatures may appear during rotation; accept if any one matches.        |
+
+Use the [`standardwebhooks`](https://www.npmjs.com/package/standardwebhooks) package — constant-time comparison and clock-skew tolerance are tricky to roll yourself.
+
+```ts
+import { Webhook } from 'standardwebhooks';
+
+const wh = new Webhook(process.env.LOOKUP_PET_SIGNING_SECRET!);
+app.post('/lookup', async (c) => {
+  const raw = await c.req.text();
+  try {
+    wh.verify(raw, Object.fromEntries(c.req.raw.headers));
+  } catch {
+    return c.text('signature mismatch', 401);
+  }
+  const { name } = JSON.parse(raw) as { name?: string };
+  // …
+});
+```
+
+## 2. Register the tool
+
+### Via the dashboard
+
+Open `/tools` in the [dashboard](/dashboard/tools), click **Add tool**, fill in:
+
+- **Name** — `snake_case`, ≤ 64 chars (e.g. `lookup_pet`). The model sees this; pick something it'll match against the user's intent.
+- **Description** — tell the model *when* to call this. Be explicit ("ALWAYS call this when the user asks about a specific pet by name").
+- **Parameters** — a JSON Schema. Strict typing works; vague typing leads to the model passing garbage args.
+- **Webhook URL** — your public HTTPS endpoint from step 1. Speko rejects HTTP, private/loopback hosts, and known cloud-metadata IPs at registration time.
+
+On save, the dashboard shows the **signing secret once**. Copy it into your secrets manager — rotation requires creating a new tool (UUID-stable secret keys are coming).
+
+### Via the API
+
+```bash
+curl -X POST https://api-staging.speko.dev/v1/agents/_default/tools \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "lookup_pet",
+    "description": "Look up a pet by name. ALWAYS call this when the user asks about a specific pet.",
+    "parameters": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "First name of the pet." }
+      }
+    },
+    "source": {
+      "kind": "webhook",
+      "url": "https://your-endpoint.example.com/lookup",
+      "secret": "<32-char hex you supply — Speko stores it encrypted>"
+    }
+  }'
+```
+
+The `secret` you POST is what Speko uses to sign webhook deliveries. The server stores an encrypted copy and never echoes it back, so keep your local copy.
+
+### The `_default` agentId
+
+Until per-agent worker management ships, every tool you register lives under the `_default` agentId. That's the worker's default lookup key as well. When the per-agent agents table arrives, the sentinel migrates and existing tools keep working — no migration required on your side.
+
+## 3. Wire the worker
+
+If you run a LiveKit Agents worker (the typical Speko-hosted setup), the adapter loads your registered tools at session start and merges them with anything the framework provides at runtime. Use `createSpekoComponents` with the registered-tools options:
+
+```ts agent.ts
+import { defineAgent, voice } from '@livekit/agents';
+import * as silero from '@livekit/agents-plugin-silero';
+import { Speko } from '@spekoai/sdk';
+import { createSpekoComponents } from '@spekoai/adapter-livekit';
+
+const speko = new Speko({
+  apiKey: process.env.SPEKO_API_KEY!,
+  baseUrl: process.env.SPEKO_BASE_URL,
+});
+
+export default defineAgent({
+  prewarm: async (proc) => {
+    proc.userData.vad = await silero.VAD.load();
+  },
+  entry: async (ctx) => {
+    const vad = ctx.proc.userData.vad as silero.VAD;
+
+    const { stt, llm, tts } = createSpekoComponents({
+      speko,
+      vad,
+      intent: { language: 'en-US', optimizeFor: 'latency' },
+      // Enable the registered-tools loader. The loader fetches
+      // GET /v1/agents/<agentId>/tools once per session and merges
+      // the result with whatever LiveKit's ToolContext provides.
+      // Registered tools win on name collision.
+      agentId: process.env.SPEKO_AGENT_ID ?? '_default',
+      apiBaseUrl: process.env.SPEKO_BASE_URL!,
+      apiKey: process.env.SPEKO_API_KEY!,
+      onRegisteredToolsError: (err) =>
+        console.error('SpekoWorker: tools fetch failed', err),
+    });
+
+    const session = new voice.AgentSession({ vad, stt, llm, tts });
+    await session.start({
+      agent: new voice.Agent({
+        instructions:
+          'You are a brief, friendly assistant. ' +
+          'When the user asks about a specific pet by name, ' +
+          'IMMEDIATELY call lookup_pet — never make up information.',
+      }),
+      room: ctx.room,
+    });
+    await ctx.connect();
+  },
+});
+```
+
+Without `agentId`, the loader stays disabled and the agent only sees runtime tools — useful when you want to opt in selectively.
+
+## 4. Run a call
+
+The simplest client is a browser using [`@spekoai/client`](/client/overview):
+
+```ts
+import { VoiceConversation } from '@spekoai/client';
+
+const res = await fetch('/api/session', { method: 'POST' });
+const { conversationToken, livekitUrl } = await res.json();
+
+const conv = await VoiceConversation.create({
+  conversationToken,
+  livekitUrl,
+  onModeChange: (mode) => console.log(mode), // 'listening' | 'speaking'
+});
+```
+
+Your `/api/session` server route mints the LiveKit token via Speko:
+
+```ts
+const r = await fetch(process.env.SPEKO_BASE_URL + '/v1/sessions', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer ' + process.env.SPEKO_API_KEY,
+  },
+  body: JSON.stringify({
+    mode: 'cascade',
+    intent: { language: 'en-US', optimizeFor: 'latency' },
+    systemPrompt:
+      'You are PetPal. Keep responses to 1-2 short sentences. ' +
+      'When the user names a pet, IMMEDIATELY call lookup_pet.',
+    ttlSeconds: 900,
+  }),
+});
+const { conversationToken, livekitUrl } = await r.json();
+```
+
+## What gets sent over the wire
+
+When the model invokes a registered tool, Speko's executor signs the request with your secret and POSTs to your URL:
+
+```http
+POST https://your-endpoint.example.com/lookup
+content-type: application/json
+webhook-id: msg_2KQfP3QH8Gv7B
+webhook-timestamp: 1735603214
+webhook-signature: v1,F7ZxQk8j3p6m2N9...
+
+{
+  "name": "Luna"
+}
+```
+
+Your response body is what the model sees as the tool result. Errors propagate too — if your endpoint returns 4xx/5xx, the executor surfaces the error so the agent can apologize or retry instead of silently swallowing it.
+
+## Debugging
+
+Common failure modes:
+
+- **Tool never invoked.** The model didn't decide to call it. Tighten the description (be explicit about *when* to call), or set `toolChoice: "required"` in your call options to force one.
+- **Webhook never lands.** Check the worker logs for the executor span. Common: 403 from your endpoint (signature mismatch), 5xx (your code threw), or timeout (your endpoint is too slow — budget under 4 seconds).
+- **Agent says "couldn't find" instead of the real result.** Your endpoint returned 4xx. Either the query genuinely missed, or the model passed empty/wrong args. During development, have your endpoint echo back the body it received so you can spot the latter.
+- **Two voices overlap in the room.** A second agent dispatched into the same room without ending the previous session. Always call `endSession()` on your `VoiceConversation` (or disconnect the participant) before opening a new conversation.
+
+## What's next
+
+- Per-agent worker config so you can scope tools to specific agents instead of the `_default` sentinel.
+- Built-in tools — Speko-provided helpers (calendar, current time, transfer-to-human) you opt into without running your own webhook.
+- Streaming tool results for long-running queries.
+
+Track progress on the [public roadmap](https://github.com/SpekoAI/platform).
