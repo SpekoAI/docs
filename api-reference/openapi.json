@@ -33,12 +33,16 @@
         "summary": "Create a real-time voice session",
         "description": "Mints a LiveKit access token, persists the pipeline config, and dispatches an agent worker into the room. Use the returned `conversationToken` and `livekitUrl` with `@spekoai/client` to join the room from a browser.",
         "operationId": "createSession",
-        "tags": ["Voice"],
+        "tags": [
+          "Voice"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
             }
           }
         },
@@ -47,13 +51,21 @@
             "description": "Session created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CreateSessionResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSessionResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "500": { "$ref": "#/components/responses/SessionCreateFailed" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/SessionCreateFailed"
+          }
         }
       }
     },
@@ -62,27 +74,35 @@
         "summary": "Transcribe audio (speech to text)",
         "description": "Routes the request to the best STT provider for your `(language, optimizeFor)` intent, with automatic failover to runner-up providers. Body is binary audio. Routing intent goes in the `x-speko-intent` header (JSON).",
         "operationId": "transcribe",
-        "tags": ["Voice"],
+        "tags": [
+          "Voice"
+        ],
         "parameters": [
           {
             "in": "header",
             "name": "x-speko-intent",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "JSON-encoded `RoutingIntent`. Example: `{\"language\":\"en-US\"}`."
           },
           {
             "in": "header",
             "name": "x-speko-constraints",
             "required": false,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Optional JSON-encoded `PipelineConstraints`. Example: `{\"allowedProviders\":{\"stt\":[\"deepgram\"]}}`."
           },
           {
             "in": "header",
             "name": "Content-Type",
             "required": false,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Audio MIME type, e.g. `audio/wav`, `audio/mpeg`, `audio/pcm;rate=16000`."
           }
         ],
@@ -91,13 +111,22 @@
           "description": "Binary audio. WAV, MP3, or raw PCM accepted.",
           "content": {
             "application/octet-stream": {
-              "schema": { "type": "string", "format": "binary" }
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             },
             "audio/wav": {
-              "schema": { "type": "string", "format": "binary" }
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             },
             "audio/mpeg": {
-              "schema": { "type": "string", "format": "binary" }
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
             }
           }
         },
@@ -105,20 +134,48 @@
           "200": {
             "description": "Transcript",
             "headers": {
-              "X-Speko-Provider": { "schema": { "type": "string" }, "description": "Provider that actually handled the request." },
-              "X-Speko-Model": { "schema": { "type": "string" }, "description": "Specific model used." },
-              "X-Speko-Failover-Count": { "schema": { "type": "integer" }, "description": "Number of providers tried before success." },
-              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" }, "description": "Benchmark snapshot id used for routing." }
+              "X-Speko-Provider": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Provider that actually handled the request."
+              },
+              "X-Speko-Model": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Specific model used."
+              },
+              "X-Speko-Failover-Count": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Number of providers tried before success."
+              },
+              "X-Speko-Scores-Run-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Benchmark snapshot id used for routing."
+              }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TranscribeResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TranscribeResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/InvalidAudio" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "500": { "$ref": "#/components/responses/TranscribeFailed" }
+          "400": {
+            "$ref": "#/components/responses/InvalidAudio"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/TranscribeFailed"
+          }
         }
       }
     },
@@ -127,12 +184,16 @@
         "summary": "Synthesize speech (text to speech)",
         "description": "Routes the request to the best TTS provider for your intent, with automatic failover. Returns binary audio. The `Content-Type` header (mirrored in `X-Speko-Audio-Format`) tells you the format.",
         "operationId": "synthesize",
-        "tags": ["Voice"],
+        "tags": [
+          "Voice"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SynthesizeRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/SynthesizeRequest"
+              }
             }
           }
         },
@@ -140,22 +201,61 @@
           "200": {
             "description": "Audio bytes",
             "headers": {
-              "Content-Type": { "schema": { "type": "string" }, "description": "Audio MIME type, e.g. `audio/pcm;rate=24000` or `audio/mpeg`." },
-              "X-Speko-Audio-Format": { "schema": { "type": "string" }, "description": "Mirrors `Content-Type` for client-side dispatch." },
-              "X-Speko-Provider": { "schema": { "type": "string" }, "description": "Provider that actually handled the request." },
-              "X-Speko-Model": { "schema": { "type": "string" }, "description": "Specific model used." },
-              "X-Speko-Failover-Count": { "schema": { "type": "integer" }, "description": "Number of providers tried before success." },
-              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" }, "description": "Benchmark snapshot id used for routing." }
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Audio MIME type, e.g. `audio/pcm;rate=24000` or `audio/mpeg`."
+              },
+              "X-Speko-Audio-Format": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Mirrors `Content-Type` for client-side dispatch."
+              },
+              "X-Speko-Provider": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Provider that actually handled the request."
+              },
+              "X-Speko-Model": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Specific model used."
+              },
+              "X-Speko-Failover-Count": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Number of providers tried before success."
+              },
+              "X-Speko-Scores-Run-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Benchmark snapshot id used for routing."
+              }
             },
             "content": {
               "application/octet-stream": {
-                "schema": { "type": "string", "format": "binary" }
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "500": { "$ref": "#/components/responses/SynthesizeFailed" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/SynthesizeFailed"
+          }
         }
       }
     },
@@ -164,12 +264,16 @@
         "summary": "Generate an LLM completion",
         "description": "Single-turn LLM call routed to the best provider for your intent, with automatic failover. Returns assistant text + token usage.",
         "operationId": "complete",
-        "tags": ["Voice"],
+        "tags": [
+          "Voice"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CompleteRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
             }
           }
         },
@@ -177,20 +281,48 @@
           "200": {
             "description": "Completion",
             "headers": {
-              "X-Speko-Provider": { "schema": { "type": "string" }, "description": "Provider that actually handled the request." },
-              "X-Speko-Model": { "schema": { "type": "string" }, "description": "Specific model used." },
-              "X-Speko-Failover-Count": { "schema": { "type": "integer" }, "description": "Number of providers tried before success." },
-              "X-Speko-Scores-Run-Id": { "schema": { "type": "string" }, "description": "Benchmark snapshot id used for routing." }
+              "X-Speko-Provider": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Provider that actually handled the request."
+              },
+              "X-Speko-Model": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Specific model used."
+              },
+              "X-Speko-Failover-Count": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Number of providers tried before success."
+              },
+              "X-Speko-Scores-Run-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Benchmark snapshot id used for routing."
+              }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CompleteResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "500": { "$ref": "#/components/responses/CompleteFailed" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/CompleteFailed"
+          }
         }
       }
     },
@@ -199,7 +331,9 @@
         "summary": "List agents",
         "description": "Returns every agent belonging to the authenticated organization, including the seed `Default` agent. Agents are scoped per-org — IDs from another org will never appear here.",
         "operationId": "listAgents",
-        "tags": ["Agents"],
+        "tags": [
+          "Agents"
+        ],
         "responses": {
           "200": {
             "description": "Agents owned by the authenticated organization.",
@@ -207,24 +341,32 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Agent" }
+                  "items": {
+                    "$ref": "#/components/schemas/Agent"
+                  }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       },
       "post": {
         "summary": "Create an agent",
         "description": "Persists a reusable voice persona — `systemPrompt`, optional `voice`, routing `intent`, and optional `llmOptions` — keyed by `name` within the authenticated organization. Pass the returned `id` as `agentId` on `POST /v1/sessions` to seed a session from this agent.",
         "operationId": "createAgent",
-        "tags": ["Agents"],
+        "tags": [
+          "Agents"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateAgentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRequest"
+              }
             }
           }
         },
@@ -233,13 +375,21 @@
             "description": "Agent created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Agent" }
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "409": { "$ref": "#/components/responses/AgentNameConflict" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/AgentNameConflict"
+          }
         }
       }
     },
@@ -248,13 +398,17 @@
         "summary": "Get an agent",
         "description": "Fetch a single agent by id. Scoped to the authenticated organization — agents owned by another org always return 404.",
         "operationId": "getAgent",
-        "tags": ["Agents"],
+        "tags": [
+          "Agents"
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Agent id, prefixed `agent_`."
           }
         ],
@@ -263,25 +417,35 @@
             "description": "Agent",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Agent" }
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/AgentNotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/AgentNotFound"
+          }
         }
       },
       "patch": {
         "summary": "Update an agent",
         "description": "Partial update — every field on the body is optional and only supplied keys are written. The seed `Default` agent's `name` cannot be changed; other fields can. Updating `name` to one already used by another agent in the org returns 409.",
         "operationId": "updateAgent",
-        "tags": ["Agents"],
+        "tags": [
+          "Agents"
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Agent id, prefixed `agent_`."
           }
         ],
@@ -289,7 +453,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/UpdateAgentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentRequest"
+              }
             }
           }
         },
@@ -298,27 +464,41 @@
             "description": "Agent updated",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Agent" }
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/AgentNotFound" },
-          "409": { "$ref": "#/components/responses/AgentNameConflict" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/AgentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/AgentNameConflict"
+          }
         }
       },
       "delete": {
         "summary": "Delete an agent",
         "description": "Removes the agent and FK-cascades to any registered tools. The seed `Default` agent for an organization cannot be deleted and returns 400.",
         "operationId": "deleteAgent",
-        "tags": ["Agents"],
+        "tags": [
+          "Agents"
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Agent id, prefixed `agent_`."
           }
         ],
@@ -329,17 +509,30 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["deleted"],
+                  "required": [
+                    "deleted"
+                  ],
                   "properties": {
-                    "deleted": { "type": "boolean", "enum": [true] }
+                    "deleted": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
                   }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/AgentDeleteForbidden" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/AgentNotFound" }
+          "400": {
+            "$ref": "#/components/responses/AgentDeleteForbidden"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/AgentNotFound"
+          }
         }
       }
     }
@@ -355,23 +548,37 @@
     "schemas": {
       "RoutingIntent": {
         "type": "object",
-        "required": ["language"],
+        "required": [
+          "language"
+        ],
         "properties": {
           "language": {
             "type": "string",
             "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
             "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
-            "examples": ["en-US"]
+            "examples": [
+              "en-US"
+            ]
           },
           "region": {
             "type": "string",
-            "enum": ["global", "us-east4", "europe-west3", "asia-southeast1"],
+            "enum": [
+              "global",
+              "us-east4",
+              "europe-west3",
+              "asia-southeast1"
+            ],
             "default": "global",
             "description": "Region whose streaming-latency measurements should be used. `global` falls through to batch-mode rows when no per-region data matches."
           },
           "optimizeFor": {
             "type": "string",
-            "enum": ["balanced", "accuracy", "latency", "cost"],
+            "enum": [
+              "balanced",
+              "accuracy",
+              "latency",
+              "cost"
+            ],
             "default": "balanced"
           }
         }
@@ -383,20 +590,52 @@
             "type": "object",
             "description": "Restrict candidate pool per modality. Router still ranks by score.",
             "properties": {
-              "stt": { "type": "array", "items": { "type": "string" } },
-              "llm": { "type": "array", "items": { "type": "string" } },
-              "tts": { "type": "array", "items": { "type": "string" } },
-              "s2s": { "type": "array", "items": { "type": "string" } }
+              "stt": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "llm": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "tts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "s2s": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
       },
       "ChatMessage": {
         "type": "object",
-        "required": ["role", "content"],
+        "required": [
+          "role",
+          "content"
+        ],
         "properties": {
-          "role": { "type": "string", "enum": ["system", "user", "assistant"] },
-          "content": { "type": "string" }
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
         }
       },
       "CreateSessionRequest": {
@@ -407,8 +646,12 @@
             "type": "string",
             "description": "Optional pointer to a persisted `agent` row whose fields seed this session. When supplied, the agent's `systemPrompt`, `voice`, `intent`, and `llmOptions` become defaults; any per-call field on this body overrides the agent's stored value. When absent, `intent` is required."
           },
-          "intent": { "$ref": "#/components/schemas/RoutingIntent" },
-          "constraints": { "$ref": "#/components/schemas/PipelineConstraints" },
+          "intent": {
+            "$ref": "#/components/schemas/RoutingIntent"
+          },
+          "constraints": {
+            "$ref": "#/components/schemas/PipelineConstraints"
+          },
           "voice": {
             "type": "string",
             "description": "Force a specific TTS voice id."
@@ -420,15 +663,29 @@
           "llm": {
             "type": "object",
             "properties": {
-              "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
-              "maxTokens": { "type": "integer", "minimum": 1 }
+              "temperature": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "maxTokens": {
+                "type": "integer",
+                "minimum": 1
+              }
             }
           },
           "ttsOptions": {
             "type": "object",
             "properties": {
-              "sampleRate": { "type": "integer", "minimum": 1 },
-              "speed": { "type": "number", "minimum": 0.5, "maximum": 2 }
+              "sampleRate": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "speed": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 2
+              }
             }
           },
           "metadata": {
@@ -453,91 +710,215 @@
       },
       "CreateSessionResponse": {
         "type": "object",
-        "required": ["sessionId", "conversationToken", "livekitUrl", "roomName", "identity", "expiresAt"],
+        "required": [
+          "sessionId",
+          "conversationToken",
+          "livekitUrl",
+          "roomName",
+          "identity",
+          "expiresAt"
+        ],
         "properties": {
-          "sessionId": { "type": "string", "format": "uuid" },
-          "conversationToken": { "type": "string", "description": "LiveKit JWT for the browser to join the room." },
-          "livekitUrl": { "type": "string", "format": "uri" },
-          "roomName": { "type": "string", "examples": ["speko_..."] },
-          "identity": { "type": "string" },
-          "expiresAt": { "type": "string", "format": "date-time" }
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "conversationToken": {
+            "type": "string",
+            "description": "LiveKit JWT for the browser to join the room."
+          },
+          "livekitUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "roomName": {
+            "type": "string",
+            "examples": [
+              "speko_..."
+            ]
+          },
+          "identity": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "TranscribeResponse": {
         "type": "object",
-        "required": ["text", "provider", "model", "failoverCount"],
+        "required": [
+          "text",
+          "provider",
+          "model",
+          "failoverCount"
+        ],
         "properties": {
-          "text": { "type": "string" },
-          "provider": { "type": "string", "description": "Provider that actually ran (post-failover)." },
-          "model": { "type": "string" },
-          "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-          "failoverCount": { "type": "integer", "minimum": 0 },
-          "scoresRunId": { "type": ["string", "null"] }
+          "text": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider that actually ran (post-failover)."
+          },
+          "model": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "failoverCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scoresRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       },
       "SynthesizeRequest": {
         "type": "object",
-        "required": ["text", "intent"],
+        "required": [
+          "text",
+          "intent"
+        ],
         "properties": {
-          "text": { "type": "string", "minLength": 1, "maxLength": 10000 },
-          "intent": { "$ref": "#/components/schemas/RoutingIntent" },
-          "voice": { "type": "string", "description": "Provider-specific voice id. Speko falls back to a sane default per provider when omitted." },
-          "speed": { "type": "number", "minimum": 0.5, "maximum": 2 },
-          "constraints": { "$ref": "#/components/schemas/PipelineConstraints" }
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "intent": {
+            "$ref": "#/components/schemas/RoutingIntent"
+          },
+          "voice": {
+            "type": "string",
+            "description": "Provider-specific voice id. Speko falls back to a sane default per provider when omitted."
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 2
+          },
+          "constraints": {
+            "$ref": "#/components/schemas/PipelineConstraints"
+          }
         }
       },
       "CompleteRequest": {
         "type": "object",
-        "required": ["messages", "intent"],
+        "required": [
+          "messages",
+          "intent"
+        ],
         "properties": {
           "messages": {
             "type": "array",
             "minItems": 1,
-            "items": { "$ref": "#/components/schemas/ChatMessage" }
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            }
           },
-          "intent": { "$ref": "#/components/schemas/RoutingIntent" },
-          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
-          "maxTokens": { "type": "integer", "minimum": 1 },
+          "intent": {
+            "$ref": "#/components/schemas/RoutingIntent"
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "maxTokens": {
+            "type": "integer",
+            "minimum": 1
+          },
           "systemPrompt": {
             "type": "string",
             "description": "Forwarded via the canonical system-prompt slot. Don't *also* prepend the same content as a `system` message."
           },
-          "constraints": { "$ref": "#/components/schemas/PipelineConstraints" }
+          "constraints": {
+            "$ref": "#/components/schemas/PipelineConstraints"
+          }
         }
       },
       "CompleteResponse": {
         "type": "object",
-        "required": ["text", "provider", "model", "usage", "failoverCount"],
+        "required": [
+          "text",
+          "provider",
+          "model",
+          "usage",
+          "failoverCount"
+        ],
         "properties": {
-          "text": { "type": "string" },
-          "provider": { "type": "string" },
-          "model": { "type": "string" },
+          "text": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
           "usage": {
             "type": "object",
-            "required": ["promptTokens", "completionTokens"],
+            "required": [
+              "promptTokens",
+              "completionTokens"
+            ],
             "properties": {
-              "promptTokens": { "type": "integer", "minimum": 0 },
-              "completionTokens": { "type": "integer", "minimum": 0 }
+              "promptTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "completionTokens": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           },
-          "failoverCount": { "type": "integer", "minimum": 0 },
-          "scoresRunId": { "type": ["string", "null"] }
+          "failoverCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scoresRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       },
       "AgentIntent": {
         "type": "object",
         "description": "Routing defaults stored on an agent row. Hydrated into a session's `RoutingIntent` when the session is created with `agentId` and no inline `intent`. Note: agents accept a smaller `optimizeFor` enum than the per-session `RoutingIntent`.",
-        "required": ["language"],
+        "required": [
+          "language"
+        ],
         "properties": {
           "language": {
             "type": "string",
             "minLength": 2,
             "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
-            "examples": ["en-US"]
+            "examples": [
+              "en-US"
+            ]
           },
           "optimizeFor": {
             "type": "string",
-            "enum": ["latency", "quality", "cost"]
+            "enum": [
+              "latency",
+              "quality",
+              "cost"
+            ]
           }
         }
       },
@@ -546,20 +927,43 @@
         "description": "Optional LLM tuning defaults stored on an agent. Strict object — only these three keys are accepted.",
         "additionalProperties": false,
         "properties": {
-          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
-          "maxTokens": { "type": "integer", "minimum": 1 },
-          "model": { "type": "string", "description": "Pin a specific LLM model id. When omitted, the router picks per intent." }
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "maxTokens": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "model": {
+            "type": "string",
+            "description": "Pin a specific LLM model id. When omitted, the router picks per intent."
+          }
         }
       },
       "Agent": {
         "type": "object",
         "description": "Reusable voice persona — `systemPrompt` + optional `voice` + routing `intent` defaults, plus optional `llmOptions`. Pass the `id` as `agentId` on `POST /v1/sessions` to seed a session from this agent.",
-        "required": ["id", "organizationId", "name", "systemPrompt", "voice", "intent", "llmOptions", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "organizationId",
+          "name",
+          "systemPrompt",
+          "voice",
+          "intent",
+          "llmOptions",
+          "createdAt",
+          "updatedAt",
+          "stackPreferences"
+        ],
         "properties": {
           "id": {
             "type": "string",
             "description": "Agent id, prefixed `agent_`.",
-            "examples": ["agent_01HW..."]
+            "examples": [
+              "agent_01HW..."
+            ]
           },
           "organizationId": {
             "type": "string",
@@ -577,24 +981,54 @@
             "description": "Initial agent instructions. Hydrated as the session's `systemPrompt` default when no per-call value is supplied."
           },
           "voice": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Default TTS voice id. `null` when unset — the router picks a sane default per provider."
           },
-          "intent": { "$ref": "#/components/schemas/AgentIntent" },
+          "intent": {
+            "$ref": "#/components/schemas/AgentIntent"
+          },
           "llmOptions": {
             "oneOf": [
-              { "$ref": "#/components/schemas/AgentLlmOptions" },
-              { "type": "null" }
+              {
+                "$ref": "#/components/schemas/AgentLlmOptions"
+              },
+              {
+                "type": "null"
+              }
             ],
             "description": "Optional LLM tuning defaults. `null` when unset."
           },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "stackPreferences": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AgentStackPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-agent stack preferences. `null` when the agent has no preferences set."
+          }
         }
       },
       "CreateAgentRequest": {
         "type": "object",
-        "required": ["name", "systemPrompt", "intent"],
+        "required": [
+          "name",
+          "systemPrompt",
+          "intent"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -611,8 +1045,15 @@
             "type": "string",
             "description": "Default TTS voice id. Omit to let the router pick per provider."
           },
-          "intent": { "$ref": "#/components/schemas/AgentIntent" },
-          "llmOptions": { "$ref": "#/components/schemas/AgentLlmOptions" }
+          "intent": {
+            "$ref": "#/components/schemas/AgentIntent"
+          },
+          "llmOptions": {
+            "$ref": "#/components/schemas/AgentLlmOptions"
+          },
+          "stackPreferences": {
+            "$ref": "#/components/schemas/AgentStackPreferences"
+          }
         }
       },
       "UpdateAgentRequest": {
@@ -632,16 +1073,67 @@
           "voice": {
             "type": "string"
           },
-          "intent": { "$ref": "#/components/schemas/AgentIntent" },
-          "llmOptions": { "$ref": "#/components/schemas/AgentLlmOptions" }
+          "intent": {
+            "$ref": "#/components/schemas/AgentIntent"
+          },
+          "llmOptions": {
+            "$ref": "#/components/schemas/AgentLlmOptions"
+          },
+          "stackPreferences": {
+            "$ref": "#/components/schemas/AgentStackPreferences"
+          }
         }
       },
       "Error": {
         "type": "object",
-        "required": ["error", "code"],
+        "required": [
+          "error",
+          "code"
+        ],
         "properties": {
-          "error": { "type": "string", "description": "Human-readable message." },
-          "code": { "type": "string", "description": "Machine-readable code." }
+          "error": {
+            "type": "string",
+            "description": "Human-readable message."
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable code."
+          }
+        }
+      },
+      "AgentStackPreferences": {
+        "type": "object",
+        "description": "Per-agent stack preferences. Empty / missing layers leave the router unconstrained for that layer; failover stays active within the allowed set.",
+        "additionalProperties": false,
+        "properties": {
+          "allowedProviders": {
+            "type": "object",
+            "description": "Per-pipeline-layer provider allowlists (e.g. STT must be Deepgram or AssemblyAI).",
+            "additionalProperties": false,
+            "properties": {
+              "stt": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed STT provider ids. Empty / absent = no constraint."
+              },
+              "llm": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed LLM provider ids."
+              },
+              "tts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed TTS provider ids."
+              }
+            }
+          }
         }
       }
     },
@@ -650,9 +1142,16 @@
         "description": "Missing or invalid bearer token.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "Unauthorized", "code": "UNAUTHORIZED" } }
+              "default": {
+                "value": {
+                  "error": "Unauthorized",
+                  "code": "UNAUTHORIZED"
+                }
+              }
             }
           }
         }
@@ -661,9 +1160,16 @@
         "description": "Request body or query parameters failed validation.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "Invalid request body", "code": "VALIDATION_ERROR" } }
+              "default": {
+                "value": {
+                  "error": "Invalid request body",
+                  "code": "VALIDATION_ERROR"
+                }
+              }
             }
           }
         }
@@ -672,9 +1178,16 @@
         "description": "Empty body, missing/invalid `x-speko-intent` header, or malformed `x-speko-constraints`.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "Audio body is empty.", "code": "INVALID_AUDIO" } }
+              "default": {
+                "value": {
+                  "error": "Audio body is empty.",
+                  "code": "INVALID_AUDIO"
+                }
+              }
             }
           }
         }
@@ -683,9 +1196,16 @@
         "description": "No STT provider available for the intent, or every candidate failed.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "All providers failed", "code": "TRANSCRIBE_FAILED" } }
+              "default": {
+                "value": {
+                  "error": "All providers failed",
+                  "code": "TRANSCRIBE_FAILED"
+                }
+              }
             }
           }
         }
@@ -694,9 +1214,16 @@
         "description": "No TTS provider available for the intent, no default voice for chosen provider, or every candidate failed.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "All providers failed", "code": "SYNTHESIZE_FAILED" } }
+              "default": {
+                "value": {
+                  "error": "All providers failed",
+                  "code": "SYNTHESIZE_FAILED"
+                }
+              }
             }
           }
         }
@@ -705,9 +1232,16 @@
         "description": "No LLM provider available for the intent, or every candidate failed.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "All providers failed", "code": "COMPLETE_FAILED" } }
+              "default": {
+                "value": {
+                  "error": "All providers failed",
+                  "code": "COMPLETE_FAILED"
+                }
+              }
             }
           }
         }
@@ -716,9 +1250,16 @@
         "description": "Token mint failed, agent dispatch failed, or DB insert failed.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "Failed to dispatch voice agent", "code": "SESSION_CREATE_FAILED" } }
+              "default": {
+                "value": {
+                  "error": "Failed to dispatch voice agent",
+                  "code": "SESSION_CREATE_FAILED"
+                }
+              }
             }
           }
         }
@@ -727,9 +1268,16 @@
         "description": "No agent with this id exists in the authenticated organization.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "not found", "code": "NOT_FOUND" } }
+              "default": {
+                "value": {
+                  "error": "not found",
+                  "code": "NOT_FOUND"
+                }
+              }
             }
           }
         }
@@ -738,9 +1286,16 @@
         "description": "Another agent in the same organization already uses this name.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "Agent with this name already exists", "code": "AGENT_NAME_CONFLICT" } }
+              "default": {
+                "value": {
+                  "error": "Agent with this name already exists",
+                  "code": "AGENT_NAME_CONFLICT"
+                }
+              }
             }
           }
         }
@@ -749,9 +1304,16 @@
         "description": "The seed `Default` agent for an organization cannot be deleted.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
             "examples": {
-              "default": { "value": { "error": "Cannot delete the Default agent for this organization", "code": "AGENT_DELETE_FORBIDDEN" } }
+              "default": {
+                "value": {
+                  "error": "Cannot delete the Default agent for this organization",
+                  "code": "AGENT_DELETE_FORBIDDEN"
+                }
+              }
             }
           }
         }
