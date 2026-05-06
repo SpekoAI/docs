@@ -23,10 +23,11 @@ On save, you land on the agent's detail page. The new id (e.g. `agent_a1b2c3d4e5
 
 ## The detail page
 
-Each agent has two tabs:
+Each agent has three tabs:
 
 - **Persona** — the form you used to create it. Edits apply to the next session started against this agent; in-flight sessions keep the snapshot they were minted with.
 - **Tools (N)** — the list of webhook tools registered under this agent. Add, edit, and delete from here. Tools are scoped per agent — different agents can register the same tool name without colliding.
+- **Sessions (N)** — every voice session started against this agent. Read-only — the list is just a filtered view of `/sessions` scoped to this agentId. Click any row to drill into the per-session pipeline config and usage.
 
 ## The `Default` agent
 

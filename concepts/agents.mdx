@@ -71,6 +71,12 @@ Rules of thumb:
 
 Stack preferences are configured per agent — either via the dashboard's **Stack preferences** section on the Persona tab, or via `stackPreferences` in `POST /v1/agents` / `PATCH /v1/agents/{id}`.
 
+## Session history
+
+Every session started with `agentId` (whether via `POST /v1/sessions` directly or via the SDK's `VoiceConversation.create({ agentId })`) is linked to that agent at create time. The dashboard surfaces them under the **Sessions** tab on the agent's detail page; the API equivalent is `GET /v1/sessions?agent=<id>`, which scopes the standard sessions list down to that agent's calls and combines with the existing `cursor`, `status`, `kind`, and `limit` filters.
+
+The link is read-only — sessions are not retroactively attached to an agent, only at create time.
+
 ## Tools live under agents
 
 Every tool you register is scoped to a specific agent — the unique key is `(organization, agentId, toolName)`. This means:
