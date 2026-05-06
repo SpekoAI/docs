@@ -42,10 +42,30 @@ Speko's default behavior is auto-routing — for each session, the highest-scori
 }
 ```
 
+### Vendor vs model entries
+
+Each entry in an `allowedProviders` list is either a vendor id (allow any model from that vendor) or `"<vendor>:<model>"` (allow only that specific model). Both forms can be mixed in the same array. Failover stays active across all entries in the layer.
+
+```json
+{
+  "stackPreferences": {
+    "allowedProviders": {
+      "stt": ["deepgram:nova-3", "assemblyai"],
+      "llm": ["openai:gpt-5", "anthropic"],
+      "tts": ["elevenlabs:eleven_flash_v2_5"]
+    }
+  }
+}
+```
+
+Reading that example: STT must be Deepgram's Nova-3 specifically, or any model from AssemblyAI. LLM must be OpenAI's GPT-5 specifically, or any model from Anthropic. TTS must be ElevenLabs' `eleven_flash_v2_5` and nothing else.
+
+`["deepgram:nova-3", "deepgram:nova-2"]` is also valid — that pins to two specific Deepgram models, with no fallback to other Deepgram models within the vendor (failover to other allowed vendors still applies). Use `GET /v1/providers/known` to enumerate every `(vendor, model)` pair the router knows about — the `id` field on each entry is the verbatim string to put here.
+
 Rules of thumb:
 
 - **Empty / missing layer = no constraint.** A `stt` allowlist of `[]` (or absent entirely) means the router has full freedom for STT.
-- **Failover stays active within the allowed set.** If you allowlist Deepgram + AssemblyAI for STT, and Deepgram errors mid-call, the router will fail over to AssemblyAI rather than to a non-allowed provider.
+- **Failover stays active within the allowed set.** If you allowlist Deepgram + AssemblyAI for STT, and Deepgram errors mid-call, the router will fail over to AssemblyAI rather than to a non-allowed provider. The same holds across model-level entries — `["deepgram:nova-3", "assemblyai"]` will fail over from Nova-3 to AssemblyAI.
 - **Per-call overrides win per layer.** When you start a session with both an `agentId` *and* an inline `constraints.allowedProviders.stt`, the per-call `stt` list replaces the agent's `stt` list — but the agent's `llm` and `tts` lists still apply unless those are also overridden.
 - **Empty allowlist with no fallback fails to route.** If you allowlist a provider that has no benchmark data, the router can't rank it; the session will error rather than silently picking an alternative.
 

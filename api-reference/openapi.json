@@ -94,7 +94,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Optional JSON-encoded `PipelineConstraints`. Example: `{\"allowedProviders\":{\"stt\":[\"deepgram\"]}}`."
+            "description": "Optional JSON-encoded `PipelineConstraints`. Each `allowedProviders` entry is either `\"<vendor>\"` (any model from that vendor) or `\"<vendor>:<model>\"` (a specific model). Example: `{\"allowedProviders\":{\"stt\":[\"deepgram:nova-3\"]}}`."
           },
           {
             "in": "header",
@@ -535,6 +535,31 @@
           }
         }
       }
+    },
+    "/v1/providers/known": {
+      "get": {
+        "summary": "List known providers",
+        "description": "Returns every (vendor, model) pair the router knows about per pipeline layer, plus one vendor-wildcard row per vendor. The `id` field on each entry is the verbatim string callers put into `allowedProviders` on session create, transcribe, synthesize, complete, or `stackPreferences` on an agent. Use this to populate UI pickers or validate user-supplied allowlists.",
+        "operationId": "getKnownProviders",
+        "tags": [
+          "Providers"
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-modality lists of allowlist-eligible entries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnownProviders"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -588,30 +613,53 @@
         "properties": {
           "allowedProviders": {
             "type": "object",
-            "description": "Restrict candidate pool per modality. Router still ranks by score.",
+            "description": "Restrict candidate pool per modality. Router still ranks by score. Each entry is either `\"<vendor>\"` (vendor wildcard — allow any model from that vendor) or `\"<vendor>:<model>\"` (allow only that specific model). Failover stays active across all entries in the layer.",
             "properties": {
               "stt": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed STT provider entry. Either a vendor id (e.g. `\"deepgram\"` — any Deepgram model) or `\"<vendor>:<model>\"` (e.g. `\"deepgram:nova-3\"` — only Nova-3, no fallback to other Deepgram models within the vendor). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "deepgram",
+                    "deepgram:nova-3",
+                    "assemblyai"
+                  ]
                 }
               },
               "llm": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed LLM provider entry. Either a vendor id (e.g. `\"openai\"` — any OpenAI model) or `\"<vendor>:<model>\"` (e.g. `\"openai:gpt-5\"` — only that model). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "openai",
+                    "openai:gpt-5",
+                    "anthropic"
+                  ]
                 }
               },
               "tts": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed TTS provider entry. Either a vendor id (e.g. `\"elevenlabs\"` — any ElevenLabs model) or `\"<vendor>:<model>\"` (e.g. `\"elevenlabs:eleven_flash_v2_5\"` — only that model). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "elevenlabs",
+                    "elevenlabs:eleven_flash_v2_5",
+                    "cartesia"
+                  ]
                 }
               },
               "s2s": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed S2S provider entry. Either a vendor id (e.g. `\"openai\"` — any OpenAI realtime model) or `\"<vendor>:<model>\"` (e.g. `\"openai:gpt-realtime\"` — only that model). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "openai",
+                    "openai:gpt-realtime"
+                  ]
                 }
               }
             }
@@ -1108,30 +1156,126 @@
         "properties": {
           "allowedProviders": {
             "type": "object",
-            "description": "Per-pipeline-layer provider allowlists (e.g. STT must be Deepgram or AssemblyAI).",
+            "description": "Per-pipeline-layer provider allowlists (e.g. STT must be Deepgram or AssemblyAI). Each entry is either `\"<vendor>\"` (vendor wildcard — allow any model from that vendor) or `\"<vendor>:<model>\"` (allow only that specific model). Failover stays active across all entries in the layer.",
             "additionalProperties": false,
             "properties": {
               "stt": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed STT provider entry. Either a vendor id (e.g. `\"deepgram\"` — any Deepgram model) or `\"<vendor>:<model>\"` (e.g. `\"deepgram:nova-3\"` — only Nova-3, no fallback to other Deepgram models within the vendor). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "deepgram",
+                    "deepgram:nova-3",
+                    "assemblyai"
+                  ]
                 },
-                "description": "Allowed STT provider ids. Empty / absent = no constraint."
+                "description": "Allowed STT provider entries. Empty / absent = no constraint."
               },
               "llm": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed LLM provider entry. Either a vendor id (e.g. `\"openai\"` — any OpenAI model) or `\"<vendor>:<model>\"` (e.g. `\"openai:gpt-5\"` — only that model). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "openai",
+                    "openai:gpt-5",
+                    "anthropic"
+                  ]
                 },
-                "description": "Allowed LLM provider ids."
+                "description": "Allowed LLM provider entries. Empty / absent = no constraint."
               },
               "tts": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Allowed TTS provider entry. Either a vendor id (e.g. `\"elevenlabs\"` — any ElevenLabs model) or `\"<vendor>:<model>\"` (e.g. `\"elevenlabs:eleven_flash_v2_5\"` — only that model). Both forms can be mixed in the same array.",
+                  "examples": [
+                    "elevenlabs",
+                    "elevenlabs:eleven_flash_v2_5",
+                    "cartesia"
+                  ]
                 },
-                "description": "Allowed TTS provider ids."
+                "description": "Allowed TTS provider entries. Empty / absent = no constraint."
               }
+            }
+          }
+        }
+      },
+      "ProviderModelEntry": {
+        "type": "object",
+        "description": "A single allowlist-eligible entry returned by `/v1/providers/known`. The `id` is the verbatim string callers put into `allowedProviders` — either a vendor wildcard (`\"deepgram\"`) or a specific (vendor, model) pair (`\"deepgram:nova-3\"`).",
+        "required": [
+          "id",
+          "vendor",
+          "vendorName",
+          "model",
+          "benchmarked"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Verbatim string for `allowedProviders` entries. `\"<vendor>\"` for vendor-wildcard rows, `\"<vendor>:<model>\"` for model-specific rows.",
+            "examples": [
+              "deepgram",
+              "deepgram:nova-3"
+            ]
+          },
+          "vendor": {
+            "type": "string",
+            "description": "Lowercase vendor id.",
+            "examples": [
+              "deepgram"
+            ]
+          },
+          "vendorName": {
+            "type": "string",
+            "description": "Human-readable vendor name.",
+            "examples": [
+              "Deepgram"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Model id within the vendor, or `null` for the vendor-wildcard row.",
+            "examples": [
+              "nova-3"
+            ]
+          },
+          "benchmarked": {
+            "type": "boolean",
+            "description": "Whether the router has benchmark data for this entry. `false` entries are visible but cannot win selection — including them in `allowedProviders` without a benchmarked fallback will fail to route."
+          }
+        }
+      },
+      "KnownProviders": {
+        "type": "object",
+        "description": "Per-modality lists of allowlist-eligible entries. Each layer's array contains one vendor-wildcard row per known vendor plus one row per known (vendor, model) pair. Use the `id` field as the verbatim string for `allowedProviders`.",
+        "required": [
+          "stt",
+          "llm",
+          "tts"
+        ],
+        "properties": {
+          "stt": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderModelEntry"
+            }
+          },
+          "llm": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderModelEntry"
+            }
+          },
+          "tts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderModelEntry"
             }
           }
         }

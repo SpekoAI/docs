@@ -69,6 +69,8 @@ Speko still ranks by composite — it just picks the highest-ranking candidate t
 - Honor compliance constraints (data residency, BAA coverage).
 - Cap costs by excluding premium providers.
 
+Allowlists are model-aware. Each entry is either a vendor id (`"deepgram"` — any Deepgram model) or `"<vendor>:<model>"` (`"deepgram:nova-3"` — only Nova-3, no fallback to other Deepgram models within the vendor). Failover stays active across all entries in the layer. Enumerate the valid `id` strings via `GET /v1/providers/known`.
+
 ## Preview before you ship
 
 `GET /v1/benchmarks/stack?language=en&region=us-east4&optimize_for=balanced` returns the current pick per modality plus runners-up, `scoresRunId`, and a `filtered_out[]` list explaining why each excluded candidate was dropped (warned status, missed latency cutoff, missing region data, etc.). No usage is recorded.
