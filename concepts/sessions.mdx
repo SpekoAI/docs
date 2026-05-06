@@ -46,3 +46,57 @@ The session has a TTL (`ttlSeconds`, default 900s, max 86400s). The agent worker
 - They aren't a chat history store. The dispatched agent's `systemPrompt` and per-turn context live in your worker.
 - They don't proxy audio. Speko is in the *control* path (mint token, dispatch worker). Audio flows browser ↔ LiveKit ↔ worker.
 - They don't bill differently from one-shot calls. Usage is recorded per underlying STT/LLM/TTS call.
+
+## Recording
+
+Every voice session is recorded by default. The agent worker captures both speakers — caller and agent — into a single mixed-mono Opus file, persisted to Google Cloud Storage at the end of the call. There is no separate "enable recording" call; producing a session produces a recording.
+
+What gets captured:
+
+- **Mixed mono Opus.** Both sides of the conversation in one file, ~24 kbps. Stereo / per-speaker tracks are not produced — assume one combined audio stream per session.
+- **The full call.** Recording starts when the first participant joins the room and ends when the room empties or the session token expires.
+- **Audio only.** Tool-call payloads and transcripts are not in the audio file; those live on the session row and the per-turn entries.
+
+How to fetch one:
+
+```bash
+curl -L \
+  -H "Authorization: Bearer $SPEKO_API_KEY" \
+  https://api.speko.ai/v1/sessions/$SESSION_ID/recording \
+  --output session.opus
+```
+
+The endpoint 302-redirects to a short-lived (5 minute) signed GCS URL — pass `-L` so curl follows it. The signed URL is single-use within its TTL window; refetch the endpoint to get a fresh one rather than caching the URL itself.
+
+### The status field
+
+Each session entry carries a `recordingStatus` that walks through:
+
+- `pending` — the call ended; the agent worker is assembling the file.
+- `uploading` — the file is being pushed to GCS.
+- `ready` — fully persisted and downloadable. `recordingObjectPath` and `recordingDurationMs` are populated.
+- `failed` — the upload errored. The recording is unrecoverable; the session itself is unaffected.
+- `suppressed` — the organization has `recordingEnabled` set to false, so no file was ever produced. This is the terminal state for opted-out orgs; it's not a transient one.
+
+`null` on `recordingStatus` only appears on legacy session entries that predate this feature. Treat it as "unknown" and don't expect a download.
+
+### Retention
+
+Recordings are kept for **30 days** after the session ends, then deleted automatically by a GCS lifecycle policy. There is no in-product way to extend retention — if you need long-term storage, follow the redirect, download the file, and store it in your own bucket. If you need shorter retention, see the per-org opt-out below.
+
+### Per-org opt-out
+
+Recording is governed at the organization level by `organization.recordingEnabled` (default `true`). Flipping it to `false`:
+
+- Stops new sessions from producing files. Their `recordingStatus` becomes `suppressed` and `GET /v1/sessions/{id}/recording` returns 404.
+- Does **not** retroactively delete prior recordings — those expire on the normal 30-day timer.
+
+The flag is exposed in the dashboard under the **Record voice sessions** toggle on the Settings page. Per-call opt-out (skipping recording for a single session even when the org default is on) is out of scope for this round.
+
+### HIPAA mode
+
+Organizations on a HIPAA-mode plan are forced into `recordingEnabled: false` regardless of the dashboard toggle, and the toggle is locked. This is the current bridge until an end-to-end customer-managed-key path lands; see the compliance issue tracker for the full story.
+
+### API endpoint
+
+`GET /v1/sessions/{id}/recording` is the only supported way to retrieve a recording. It authenticates with the same bearer key as every other endpoint and 302-redirects to a 5-minute signed URL on success, or 404 on any of: unknown session, recording not yet ready, recording failed, recording suppressed. Inspect the parent session entry's `recordingStatus` to disambiguate. Never construct GCS URLs from `recordingObjectPath` directly — those URLs are not publicly addressable, and the field exists only as an internal handle.
