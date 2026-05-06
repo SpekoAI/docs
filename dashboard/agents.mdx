@@ -16,6 +16,7 @@ Click **Create agent**, fill in:
 - **TTS voice id** *(optional)* — provider-specific id. Leave blank to let Speko's router pick the provider's default for the language.
 - **Language** *(required)* — BCP-47 tag (`en`, `en-US`, `es-MX`, etc.).
 - **Optimize for** *(optional)* — `latency` / `quality` / `cost` — biases the router.
+- **Stack preferences** *(optional)* — per-layer allowlists (STT / LLM / TTS). Empty layers = no constraint. See [Concepts → Agents → Stack preferences](/concepts/agents#stack-preferences) for the merge semantics with per-call overrides.
 - **Advanced LLM options** *(optional)* — `temperature`, `maxTokens`, `model`.
 
 On save, you land on the agent's detail page. The new id (e.g. `agent_a1b2c3d4e5f60718`) appears at the top with a copy button — that's what callers pass to `POST /v1/sessions` and to the SDK's `VoiceConversation.create({ agentId })`.

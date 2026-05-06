@@ -9,6 +9,7 @@ An **Agent** is a persisted persona record on Speko. It bundles the values you'd
 - `voice` — TTS voice id (provider-specific)
 - `intent` — `language` and optional `optimizeFor` (`latency` / `quality` / `cost`)
 - `llmOptions` — optional `temperature`, `maxTokens`, `model`
+- `stackPreferences` — optional per-layer allowlists (which STT / LLM / TTS providers the router is allowed to pick)
 
 Once created, an agent is referenced by id (e.g. `agent_a1b2c3d4e5f60718`) when starting a voice session. Per-call body fields still override the agent's stored defaults — agents are sensible defaults, not a wall.
 
@@ -24,6 +25,31 @@ Use one when the same persona is starting more than one session — that is, alm
 ```
 
 Per-call overrides are still allowed and still win, so you can pin the persona without giving up per-call tweaks (a different voice for a single VIP user, a longer system prompt for a high-stakes call, etc.).
+
+## Stack preferences
+
+Speko's default behavior is auto-routing — for each session, the highest-scoring provider per pipeline layer (STT, LLM, TTS) is picked from every benchmarked option. **Stack preferences** narrow that pool per agent, so you can express opinions like "this agent's STT must be Deepgram or AssemblyAI" or "LLM must be OpenAI or Anthropic" without giving up auto-routing or failover within the allowed set.
+
+```json
+{
+  "stackPreferences": {
+    "allowedProviders": {
+      "stt": ["deepgram", "assemblyai"],
+      "llm": ["openai", "anthropic"],
+      "tts": ["cartesia", "elevenlabs"]
+    }
+  }
+}
+```
+
+Rules of thumb:
+
+- **Empty / missing layer = no constraint.** A `stt` allowlist of `[]` (or absent entirely) means the router has full freedom for STT.
+- **Failover stays active within the allowed set.** If you allowlist Deepgram + AssemblyAI for STT, and Deepgram errors mid-call, the router will fail over to AssemblyAI rather than to a non-allowed provider.
+- **Per-call overrides win per layer.** When you start a session with both an `agentId` *and* an inline `constraints.allowedProviders.stt`, the per-call `stt` list replaces the agent's `stt` list — but the agent's `llm` and `tts` lists still apply unless those are also overridden.
+- **Empty allowlist with no fallback fails to route.** If you allowlist a provider that has no benchmark data, the router can't rank it; the session will error rather than silently picking an alternative.
+
+Stack preferences are configured per agent — either via the dashboard's **Stack preferences** section on the Persona tab, or via `stackPreferences` in `POST /v1/agents` / `PATCH /v1/agents/{id}`.
 
 ## Tools live under agents
 
