@@ -1,0 +1,64 @@
+---
+title: 'Agents'
+description: 'Reusable voice personas — system prompt, voice, and intent defaults that any session can be started against.'
+---
+
+An **Agent** is a persisted persona record on Speko. It bundles the values you'd otherwise have to repeat on every session create:
+
+- `systemPrompt` — the agent's instructions
+- `voice` — TTS voice id (provider-specific)
+- `intent` — `language` and optional `optimizeFor` (`latency` / `quality` / `cost`)
+- `llmOptions` — optional `temperature`, `maxTokens`, `model`
+
+Once created, an agent is referenced by id (e.g. `agent_a1b2c3d4e5f60718`) when starting a voice session. Per-call body fields still override the agent's stored defaults — agents are sensible defaults, not a wall.
+
+## When to use an agent
+
+Use one when the same persona is starting more than one session — that is, almost always in production. Without an agent, every `POST /v1/sessions` ships the full config inline; with an agent, you ship just `{ agentId }`.
+
+```diff
+- POST /v1/sessions
+- { "intent": { "language": "en" }, "voice": "...", "systemPrompt": "...", ... }
++ POST /v1/sessions
++ { "agentId": "agent_a1b2c3d4e5f60718" }
+```
+
+Per-call overrides are still allowed and still win, so you can pin the persona without giving up per-call tweaks (a different voice for a single VIP user, a longer system prompt for a high-stakes call, etc.).
+
+## Tools live under agents
+
+Every tool you register is scoped to a specific agent — the unique key is `(organization, agentId, toolName)`. This means:
+
+- Different agents in the same org can register tools with the same name (`lookup_user`, `book_appointment`) without colliding.
+- Adding a tool to one agent doesn't expose it to your other agents.
+- The voice worker fetches `GET /v1/agents/{agentId}/tools` at session start to assemble the tool list.
+
+Manage tools from the **Tools** tab inside an agent's detail page in the dashboard, or via the `/v1/agents/{id}/tools` API.
+
+## Lifecycle
+
+| Operation | Endpoint | Notes |
+| --- | --- | --- |
+| Create | `POST /v1/agents` | Returns the new id. Names are unique per organization. |
+| List | `GET /v1/agents` | Returns every agent in the calling key's organization. |
+| Read | `GET /v1/agents/{id}` | 404 if not found / not in your org. |
+| Update | `PATCH /v1/agents/{id}` | Partial — send only the fields you want to change. |
+| Delete | `DELETE /v1/agents/{id}` | Cascades to tools. The `Default` agent cannot be deleted. |
+
+## The `Default` agent
+
+When your organization is created, Speko seeds a single agent named `Default` so you have something to point at on day one. It's a regular agent in every other respect — edit its system prompt, voice, and intent freely. It's only special in two ways: it can't be renamed, and it can't be deleted.
+
+## Where to next
+
+<CardGroup cols={2}>
+  <Card title="Browser SDK" icon="react" href="/client/voice-conversation">
+    `VoiceConversation.create({ agentId })` — browser-side WebRTC against your agent.
+  </Card>
+  <Card title="Dashboard" icon="gauge" href="/dashboard/agents">
+    Manage agents and their tools from the web dashboard.
+  </Card>
+  <Card title="API reference" icon="terminal" href="/api-reference/agents-create">
+    Full request/response shapes for the `/v1/agents` endpoints.
+  </Card>
+</CardGroup>

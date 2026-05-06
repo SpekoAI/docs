@@ -27,7 +27,8 @@
               "concepts/byok",
               "concepts/failover",
               "concepts/scoring",
-              "concepts/sessions"
+              "concepts/sessions",
+              "concepts/agents"
             ]
           },
           {
@@ -46,6 +47,7 @@
               "dashboard/api-keys",
               "dashboard/usage",
               "dashboard/team",
+              "dashboard/agents",
               "dashboard/tools"
             ]
           },
@@ -128,6 +130,16 @@
               "api-reference/transcribe",
               "api-reference/synthesize",
               "api-reference/complete"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api-reference/agents-list",
+              "api-reference/agents-create",
+              "api-reference/agents-get",
+              "api-reference/agents-update",
+              "api-reference/agents-delete"
             ]
           }
         ]
