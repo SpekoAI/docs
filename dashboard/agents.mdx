@@ -29,6 +29,17 @@ Each agent has three tabs:
 - **Tools (N)** — the list of webhook tools registered under this agent. Add, edit, and delete from here. Tools are scoped per agent — different agents can register the same tool name without colliding.
 - **Sessions (N)** — every voice session started against this agent. Read-only — the list is just a filtered view of `/sessions` scoped to this agentId. Click any row to drill into the per-session pipeline config and usage.
 
+### The Recording card
+
+Each session detail page now has a **Recording** card sitting next to the pipeline config. It mirrors the `recordingStatus` field on the session row and shows one of four states:
+
+- **Pending** — a spinner. The call ended; the agent worker is still assembling the Opus file. Refresh in a few seconds.
+- **Ready** — a play button (in-page audio scrubber) plus a **Download** action. Clicking download hits `GET /v1/sessions/{id}/recording`, which 302-redirects to a 5-minute signed GCS URL; the browser follows it transparently. The card also shows duration (`recordingDurationMs` rendered as `m:ss`).
+- **Suppressed** — a muted icon and the message "Recording is disabled for this organization." There is nothing to download; this is terminal, not pending. Flip the **Record voice sessions** toggle on the Settings page to re-enable for future sessions.
+- **Failed** — a red banner. The file could not be persisted to GCS; the recording is unrecoverable. The rest of the session (transcript, usage, billing) is unaffected.
+
+Recordings are retained for 30 days, then deleted by the GCS lifecycle policy. If a download returns 404 from a session older than that, expect the file is gone — the lifecycle ran. See [Concepts → Sessions → Recording](/concepts/sessions#recording) for the full lifecycle and the per-org opt-out semantics.
+
 ## The `Default` agent
 
 Every organization starts with a `Default` agent, seeded automatically at signup. It exists so the playground works on day one. You can edit its system prompt, voice, and intent freely; you cannot rename it or delete it.

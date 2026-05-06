@@ -633,6 +633,63 @@
           }
         }
       }
+    },
+    "/v1/sessions/{id}/recording": {
+      "get": {
+        "summary": "Get a signed URL for the session recording",
+        "description": "Returns a 302 redirect to a short-lived (5 minute) signed Google Cloud Storage URL for the mixed-mono Opus recording of this session. Follow the redirect to download the file — clients should pass the equivalent of `curl -L`. The signed URL is single-use within its TTL window; refetch this endpoint to get a fresh one. Recordings are retained for 30 days after the session ends, then deleted by a GCS lifecycle policy.",
+        "operationId": "getSessionRecording",
+        "tags": [
+          "Voice"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Session id."
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to a signed GCS URL valid for 5 minutes. The URL is returned in the `Location` header; the response body is empty.",
+            "headers": {
+              "Location": {
+                "description": "Short-lived signed GCS URL. Follow to download the recording.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No recording exists for this session — either the id is unknown to the calling organization, recording was suppressed (`recordingStatus: \"suppressed\"`), the session is still in flight (`pending` / `uploading`), or the upload failed (`failed`). Inspect the parent session entry to disambiguate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "recording not available",
+                      "code": "RECORDING_NOT_AVAILABLE"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1405,6 +1462,28 @@
                 "description": "The agent the session was started against, if any. Filtered on by the `?agent=` query param."
               }
             }
+          },
+          "recordingObjectPath": {
+            "type": "string",
+            "nullable": true,
+            "description": "GCS object path of the recorded audio file, when a recording exists. Null while the recording is still being produced, when recording is suppressed for the organization, or when the upload failed. Use `GET /v1/sessions/{id}/recording` to fetch a short-lived signed URL — never construct one yourself."
+          },
+          "recordingDurationMs": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Duration of the finalized recording in milliseconds. Null until `recordingStatus` is `ready`."
+          },
+          "recordingStatus": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "pending",
+              "uploading",
+              "ready",
+              "failed",
+              "suppressed"
+            ],
+            "description": "Lifecycle of this session's recording. `pending` after the call ends and before the agent worker has finished assembling the file. `uploading` while the file is being pushed to GCS. `ready` once it is fully persisted and downloadable via the signed-URL endpoint. `failed` if the upload errored — the recording is unrecoverable. `suppressed` for organizations whose `recordingEnabled` flag is false; no file was ever produced. Null on legacy sessions that predate the recording feature."
           }
         }
       }
