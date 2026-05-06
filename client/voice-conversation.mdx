@@ -14,10 +14,54 @@ There is also a legacy namespace export, `Conversation`, with a single method `C
 ## `VoiceConversation.create(options)`
 
 ```ts
-static create(options: ConversationOptions): Promise<VoiceConversation>
+static create(options: CreateOptions): Promise<VoiceConversation>
 ```
 
-Connects to LiveKit, publishes the microphone track, sends any [`overrides`](#conversationoverrides) over the data channel, fires `onConnect`, and resolves. Throws a [`SpekoClientError`](/client/errors) on connection or microphone failure.
+Where `CreateOptions` is one of two shapes:
+
+```ts
+type CreateOptions = ConversationOptions | AgentConversationOptions;
+```
+
+Pick by who's minting the session.
+
+| You want… | Use this shape | Why |
+| --- | --- | --- |
+| Your backend mints sessions and forwards a token to the browser. | [`ConversationOptions`](#conversationoptions) — `{ conversationToken, livekitUrl, ... }` | Production default. The API key never reaches the browser. |
+| Your browser-only app holds a Speko API key directly (embed widgets, internal tools, prototypes). | [`AgentConversationOptions`](#agentconversationoptions) — `{ agentId, apiKey, ... }` | One call: SDK hits `POST /v1/sessions` for you using the agent's stored config. |
+
+Both forms connect to LiveKit, publish the microphone track, send any [`overrides`](#conversationoverrides) over the data channel, fire `onConnect`, and resolve. Throw a [`SpekoClientError`](/client/errors) on connection, network, or microphone failure.
+
+### `AgentConversationOptions`
+
+```ts
+interface AgentConversationOptions {
+  agentId: string;
+  apiKey: string;
+  apiBaseUrl?: string;          // defaults to https://api.speko.ai
+  overrides?: ConversationOverrides;
+  inputDeviceId?: string;
+  outputDeviceId?: string;
+  audioConstraints?: AudioConstraints;
+  // ...all the same callbacks as ConversationOptions
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agentId` | `string` | ✅ | An [agent](/concepts/agents) id (e.g. `agent_a1b2c3d4e5f60718`). The server hydrates `systemPrompt`, `voice`, `intent`, `llmOptions` from this row. |
+| `apiKey` | `string` | ✅ | Bearer token for `POST /v1/sessions`. Hold this in browser-only when the API key is intended to be public; otherwise mint sessions on your server and use [`ConversationOptions`](#conversationoptions) instead. |
+| `apiBaseUrl` | `string?` | | Override the Speko API origin. Defaults to `https://api.speko.ai`; set to `https://api-staging.speko.dev` for staging. |
+| `overrides` | `ConversationOverrides?` | | Per-session overrides applied over the data channel. Beats the agent's stored values. |
+
+```ts
+import { VoiceConversation } from '@spekoai/client';
+
+const conv = await VoiceConversation.create({
+  agentId: 'agent_a1b2c3d4e5f60718',
+  apiKey: process.env.SPEKO_API_KEY!,
+});
+```
 
 ### `ConversationOptions`
 

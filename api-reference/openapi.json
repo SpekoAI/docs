@@ -193,6 +193,155 @@
           "500": { "$ref": "#/components/responses/CompleteFailed" }
         }
       }
+    },
+    "/v1/agents": {
+      "get": {
+        "summary": "List agents",
+        "description": "Returns every agent belonging to the authenticated organization, including the seed `Default` agent. Agents are scoped per-org — IDs from another org will never appear here.",
+        "operationId": "listAgents",
+        "tags": ["Agents"],
+        "responses": {
+          "200": {
+            "description": "Agents owned by the authenticated organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Agent" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "summary": "Create an agent",
+        "description": "Persists a reusable voice persona — `systemPrompt`, optional `voice`, routing `intent`, and optional `llmOptions` — keyed by `name` within the authenticated organization. Pass the returned `id` as `agentId` on `POST /v1/sessions` to seed a session from this agent.",
+        "operationId": "createAgent",
+        "tags": ["Agents"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAgentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Agent" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": { "$ref": "#/components/responses/AgentNameConflict" }
+        }
+      }
+    },
+    "/v1/agents/{id}": {
+      "get": {
+        "summary": "Get an agent",
+        "description": "Fetch a single agent by id. Scoped to the authenticated organization — agents owned by another org always return 404.",
+        "operationId": "getAgent",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Agent id, prefixed `agent_`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Agent" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/AgentNotFound" }
+        }
+      },
+      "patch": {
+        "summary": "Update an agent",
+        "description": "Partial update — every field on the body is optional and only supplied keys are written. The seed `Default` agent's `name` cannot be changed; other fields can. Updating `name` to one already used by another agent in the org returns 409.",
+        "operationId": "updateAgent",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Agent id, prefixed `agent_`."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateAgentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Agent" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/AgentNotFound" },
+          "409": { "$ref": "#/components/responses/AgentNameConflict" }
+        }
+      },
+      "delete": {
+        "summary": "Delete an agent",
+        "description": "Removes the agent and FK-cascades to any registered tools. The seed `Default` agent for an organization cannot be deleted and returns 400.",
+        "operationId": "deleteAgent",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Agent id, prefixed `agent_`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["deleted"],
+                  "properties": {
+                    "deleted": { "type": "boolean", "enum": [true] }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/AgentDeleteForbidden" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/AgentNotFound" }
+        }
+      }
     }
   },
   "components": {
@@ -252,8 +401,12 @@
       },
       "CreateSessionRequest": {
         "type": "object",
-        "required": ["intent"],
+        "description": "Cascade-mode session creation body. Exactly one of `agentId` or `intent` must be supplied. When `agentId` is given, the persisted agent's `systemPrompt`, `voice`, `intent`, and `llmOptions` seed the session as defaults; any per-call field on this body still overrides the agent's stored value.",
         "properties": {
+          "agentId": {
+            "type": "string",
+            "description": "Optional pointer to a persisted `agent` row whose fields seed this session. When supplied, the agent's `systemPrompt`, `voice`, `intent`, and `llmOptions` become defaults; any per-call field on this body overrides the agent's stored value. When absent, `intent` is required."
+          },
           "intent": { "$ref": "#/components/schemas/RoutingIntent" },
           "constraints": { "$ref": "#/components/schemas/PipelineConstraints" },
           "voice": {
@@ -371,6 +524,118 @@
           "scoresRunId": { "type": ["string", "null"] }
         }
       },
+      "AgentIntent": {
+        "type": "object",
+        "description": "Routing defaults stored on an agent row. Hydrated into a session's `RoutingIntent` when the session is created with `agentId` and no inline `intent`. Note: agents accept a smaller `optimizeFor` enum than the per-session `RoutingIntent`.",
+        "required": ["language"],
+        "properties": {
+          "language": {
+            "type": "string",
+            "minLength": 2,
+            "description": "BCP-47 language tag, e.g. `en`, `en-US`, `es-MX`.",
+            "examples": ["en-US"]
+          },
+          "optimizeFor": {
+            "type": "string",
+            "enum": ["latency", "quality", "cost"]
+          }
+        }
+      },
+      "AgentLlmOptions": {
+        "type": "object",
+        "description": "Optional LLM tuning defaults stored on an agent. Strict object — only these three keys are accepted.",
+        "additionalProperties": false,
+        "properties": {
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "maxTokens": { "type": "integer", "minimum": 1 },
+          "model": { "type": "string", "description": "Pin a specific LLM model id. When omitted, the router picks per intent." }
+        }
+      },
+      "Agent": {
+        "type": "object",
+        "description": "Reusable voice persona — `systemPrompt` + optional `voice` + routing `intent` defaults, plus optional `llmOptions`. Pass the `id` as `agentId` on `POST /v1/sessions` to seed a session from this agent.",
+        "required": ["id", "organizationId", "name", "systemPrompt", "voice", "intent", "llmOptions", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Agent id, prefixed `agent_`.",
+            "examples": ["agent_01HW..."]
+          },
+          "organizationId": {
+            "type": "string",
+            "description": "Owning organization. Always equal to the authenticated org — agents are never visible across orgs."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Human-readable name. Unique within an organization."
+          },
+          "systemPrompt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initial agent instructions. Hydrated as the session's `systemPrompt` default when no per-call value is supplied."
+          },
+          "voice": {
+            "type": ["string", "null"],
+            "description": "Default TTS voice id. `null` when unset — the router picks a sane default per provider."
+          },
+          "intent": { "$ref": "#/components/schemas/AgentIntent" },
+          "llmOptions": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/AgentLlmOptions" },
+              { "type": "null" }
+            ],
+            "description": "Optional LLM tuning defaults. `null` when unset."
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateAgentRequest": {
+        "type": "object",
+        "required": ["name", "systemPrompt", "intent"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Human-readable name. Must be unique within the organization — duplicates return 409."
+          },
+          "systemPrompt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Initial agent instructions used as the session-level `systemPrompt` default."
+          },
+          "voice": {
+            "type": "string",
+            "description": "Default TTS voice id. Omit to let the router pick per provider."
+          },
+          "intent": { "$ref": "#/components/schemas/AgentIntent" },
+          "llmOptions": { "$ref": "#/components/schemas/AgentLlmOptions" }
+        }
+      },
+      "UpdateAgentRequest": {
+        "type": "object",
+        "description": "Partial update — every field is optional. Only supplied keys are written. The seed `Default` agent's `name` cannot be changed.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Human-readable name. Must remain unique within the organization."
+          },
+          "systemPrompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "voice": {
+            "type": "string"
+          },
+          "intent": { "$ref": "#/components/schemas/AgentIntent" },
+          "llmOptions": { "$ref": "#/components/schemas/AgentLlmOptions" }
+        }
+      },
       "Error": {
         "type": "object",
         "required": ["error", "code"],
@@ -454,6 +719,39 @@
             "schema": { "$ref": "#/components/schemas/Error" },
             "examples": {
               "default": { "value": { "error": "Failed to dispatch voice agent", "code": "SESSION_CREATE_FAILED" } }
+            }
+          }
+        }
+      },
+      "AgentNotFound": {
+        "description": "No agent with this id exists in the authenticated organization.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "default": { "value": { "error": "not found", "code": "NOT_FOUND" } }
+            }
+          }
+        }
+      },
+      "AgentNameConflict": {
+        "description": "Another agent in the same organization already uses this name.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "default": { "value": { "error": "Agent with this name already exists", "code": "AGENT_NAME_CONFLICT" } }
+            }
+          }
+        }
+      },
+      "AgentDeleteForbidden": {
+        "description": "The seed `Default` agent for an organization cannot be deleted.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "examples": {
+              "default": { "value": { "error": "Cannot delete the Default agent for this organization", "code": "AGENT_DELETE_FORBIDDEN" } }
             }
           }
         }

@@ -1,0 +1,47 @@
+---
+title: 'Agents'
+description: 'Create and manage voice personas — system prompt, voice, intent defaults, and per-agent tools.'
+---
+
+The **Agents** page is the canonical home for everything persona-shaped. Every voice session in your org points at one of these rows; each agent owns its own set of tools.
+
+For the conceptual primer, see [Concepts → Agents](/concepts/agents).
+
+## Creating an agent
+
+Click **Create agent**, fill in:
+
+- **Name** — letters/digits/spaces/hyphens/underscores, ≤ 64 chars. Must be unique within your organization.
+- **System prompt** — the agent's instructions. The LLM sees this verbatim every session.
+- **TTS voice id** *(optional)* — provider-specific id. Leave blank to let Speko's router pick the provider's default for the language.
+- **Language** *(required)* — BCP-47 tag (`en`, `en-US`, `es-MX`, etc.).
+- **Optimize for** *(optional)* — `latency` / `quality` / `cost` — biases the router.
+- **Advanced LLM options** *(optional)* — `temperature`, `maxTokens`, `model`.
+
+On save, you land on the agent's detail page. The new id (e.g. `agent_a1b2c3d4e5f60718`) appears at the top with a copy button — that's what callers pass to `POST /v1/sessions` and to the SDK's `VoiceConversation.create({ agentId })`.
+
+## The detail page
+
+Each agent has two tabs:
+
+- **Persona** — the form you used to create it. Edits apply to the next session started against this agent; in-flight sessions keep the snapshot they were minted with.
+- **Tools (N)** — the list of webhook tools registered under this agent. Add, edit, and delete from here. Tools are scoped per agent — different agents can register the same tool name without colliding.
+
+## The `Default` agent
+
+Every organization starts with a `Default` agent, seeded automatically at signup. It exists so the playground works on day one. You can edit its system prompt, voice, and intent freely; you cannot rename it or delete it.
+
+## Reaching it from the SDK
+
+Once you have an id, the browser SDK call is:
+
+```ts
+import { VoiceConversation } from '@spekoai/client';
+
+const conv = await VoiceConversation.create({
+  agentId: 'agent_a1b2c3d4e5f60718',
+  apiKey: process.env.SPEKO_API_KEY!,
+});
+```
+
+See [`VoiceConversation`](/client/voice-conversation) for the full options and the legacy server-minted-session form.
