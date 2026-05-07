@@ -3,9 +3,27 @@
   "theme": "mint",
   "name": "Speko",
   "colors": {
-    "primary": "#E8590C",
-    "light": "#FF7A2E",
-    "dark": "#C44A0A"
+    "primary": "#7cf2c8",
+    "light": "#7cf2c8",
+    "dark": "#1f6b54"
+  },
+  "appearance": {
+    "default": "dark"
+  },
+  "background": {
+    "color": {
+      "dark": "#07090b",
+      "light": "#f5f3ee"
+    }
+  },
+  "fonts": {
+    "family": "Geist",
+    "heading": {
+      "family": "Geist"
+    },
+    "body": {
+      "family": "Geist"
+    }
   },
   "favicon": "/favicon.svg",
   "navigation": {
