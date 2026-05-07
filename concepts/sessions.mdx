@@ -100,3 +100,13 @@ Organizations on a HIPAA-mode plan are forced into `recordingEnabled: false` reg
 ### API endpoint
 
 `GET /v1/sessions/{id}/recording` is the only supported way to retrieve a recording. It authenticates with the same bearer key as every other endpoint and 302-redirects to a 5-minute signed URL on success, or 404 on any of: unknown session, recording not yet ready, recording failed, recording suppressed. Inspect the parent session entry's `recordingStatus` to disambiguate. Never construct GCS URLs from `recordingObjectPath` directly — those URLs are not publicly addressable, and the field exists only as an internal handle.
+
+## Transcript
+
+Every finalized STT and LLM turn during a cascade session is persisted server-side. The dashboard's session detail page surfaces them under a Transcript card; the API equivalent is `GET /v1/sessions/{id}/transcript`, which returns turns sorted by index.
+
+The worker batches and debounces (~200ms) finalized turns and POSTs them to `/v1/sessions/{id}/turns`. The ingest endpoint is idempotent on `(session_id, index)` so retries on transient errors are safe.
+
+Interim STT partials are not persisted — only finalized turns make it into the transcript.
+
+S2S sessions don't currently produce transcripts (the audio path bypasses our STT/LLM components). That's a follow-up.
