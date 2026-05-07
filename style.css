@@ -1,0 +1,72 @@
+/* Speko docs — terminal aesthetic, mirrors apps/dashboard + apps/marketing.
+   Tokens kept in sync with packages/ui/src/styles/theme.css. */
+
+:root {
+  --speko-bg: #07090b;
+  --speko-ink: #e7ecf2;
+  --speko-line: #1f2630;
+  --speko-accent: #7cf2c8;
+}
+
+html.light {
+  --speko-bg: #f5f3ee;
+  --speko-ink: #14181c;
+  --speko-line: #c8c1b1;
+  --speko-accent: #1f6b54;
+}
+
+body {
+  font-feature-settings: 'ss01', 'ss02', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--speko-accent);
+  color: #051712;
+}
+
+/* Marketing-style lowercase on headings + interactive labels.
+   User data inside spans/divs stays case-preserved. */
+h1, h2, h3, h4, h5, h6,
+#page-title,
+.card-title,
+.tabs-trigger,
+.accordion-trigger,
+button[type="button"] {
+  text-transform: lowercase;
+}
+
+/* Flat 2px radii — terminal feel. rounded-full survives via 9999px. */
+.card,
+.callout,
+.code-block,
+.frame,
+.tabs,
+.accordion,
+#search-bar-entry,
+#topbar-cta-button,
+button[type="button"] {
+  border-radius: 2px !important;
+}
+
+/* Subtle grid atmosphere — opacity dialled below dashboard's 0.35
+   so docs stay legible. Sits under content via z-index. */
+#body-content::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, var(--speko-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--speko-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: -1px -1px;
+  opacity: 0.12;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 100%);
+}
+
+html.light #body-content::before {
+  opacity: 0.25;
+}
