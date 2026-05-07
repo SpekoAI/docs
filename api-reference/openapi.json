@@ -690,6 +690,122 @@
           }
         }
       }
+    },
+    "/v1/sessions/{id}/turns": {
+      "post": {
+        "summary": "Ingest finalized transcript turns",
+        "description": "Append finalized STT and LLM turns to a session's transcript. Worker-only — the agent worker batches and debounces (~200ms) finalized turns and POSTs them here. Interim STT partials are not accepted; only finalized turns are persisted. Idempotent on `(session_id, index)`: re-posting a turn with the same index replaces the existing entry, so retries on transient errors are safe.",
+        "operationId": "postSessionTurns",
+        "tags": [
+          "Voice"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Session id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostSessionTurnsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Turns accepted for persistence. Response body is empty."
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Session id is unknown to the calling organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "session not found",
+                      "code": "SESSION_NOT_FOUND"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{id}/transcript": {
+      "get": {
+        "summary": "Get a session's full transcript",
+        "description": "Returns every finalized STT and LLM turn captured during the session, sorted by `index` ascending. The dashboard's session detail page surfaces these under the Transcript card. S2S sessions don't currently produce transcripts (the audio path bypasses our STT/LLM components) — expect an empty `entries` array for those. Interim STT partials are never returned; only finalized turns make it into this response.",
+        "operationId": "getSessionTranscript",
+        "tags": [
+          "Voice"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Session id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full transcript for the session, ordered by `index`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTranscript"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Session id is unknown to the calling organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "session not found",
+                      "code": "SESSION_NOT_FOUND"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1484,6 +1600,147 @@
               "suppressed"
             ],
             "description": "Lifecycle of this session's recording. `pending` after the call ends and before the agent worker has finished assembling the file. `uploading` while the file is being pushed to GCS. `ready` once it is fully persisted and downloadable via the signed-URL endpoint. `failed` if the upload errored — the recording is unrecoverable. `suppressed` for organizations whose `recordingEnabled` flag is false; no file was ever produced. Null on legacy sessions that predate the recording feature."
+          }
+        }
+      },
+      "TurnIngest": {
+        "type": "object",
+        "required": [
+          "index",
+          "source",
+          "text",
+          "startedAt"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Monotonically increasing position of this turn within the session, starting at 0. The `(session_id, index)` pair is the idempotency key — re-posting a turn with the same index replaces the prior entry."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent",
+              "system"
+            ],
+            "description": "Who produced this turn. `user` = finalized STT from the caller. `agent` = finalized LLM output spoken by the agent. `system` = synthetic entries (e.g. session boundary markers)."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "description": "Finalized transcript text. Interim STT partials are not accepted."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Wall-clock time at which the turn began, ISO 8601."
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Wall-clock time at which the turn ended, ISO 8601. Null while the turn is still considered open (e.g. a streaming agent reply that hasn't fully closed)."
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true,
+            "description": "Provider that produced this turn (e.g. `deepgram`, `openai`). Null for `system` turns."
+          },
+          "model": {
+            "type": "string",
+            "nullable": true,
+            "description": "Specific model id within the provider (e.g. `nova-3`, `gpt-4o-mini`). Null for `system` turns."
+          }
+        }
+      },
+      "TurnEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "index",
+          "source",
+          "text",
+          "startedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Server-assigned id for this turn entry. Stable across reads."
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Monotonically increasing position of this turn within the session, starting at 0."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent",
+              "system"
+            ],
+            "description": "Who produced this turn."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "description": "Finalized transcript text."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Wall-clock time at which the turn began, ISO 8601."
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Wall-clock time at which the turn ended, ISO 8601. Null if the turn is still open."
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true,
+            "description": "Provider that produced this turn. Null for `system` turns."
+          },
+          "model": {
+            "type": "string",
+            "nullable": true,
+            "description": "Specific model id within the provider. Null for `system` turns."
+          }
+        }
+      },
+      "PostSessionTurnsRequest": {
+        "type": "object",
+        "required": [
+          "turns"
+        ],
+        "properties": {
+          "turns": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Batch of finalized turns to ingest. Workers should debounce (~200ms) and batch — single-turn POSTs are accepted but inefficient at scale.",
+            "items": {
+              "$ref": "#/components/schemas/TurnIngest"
+            }
+          }
+        }
+      },
+      "SessionTranscript": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "description": "Finalized turns for this session, ordered by `index` ascending.",
+            "items": {
+              "$ref": "#/components/schemas/TurnEntry"
+            }
           }
         }
       }
