@@ -3,7 +3,7 @@ title: '@spekoai/sdk'
 description: 'Official TypeScript SDK — one API, every voice provider.'
 ---
 
-`@spekoai/sdk` is the server-side TypeScript SDK for the Speko voice gateway. It wraps three proxy endpoints — `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` — a `/v1/usage` reporter, `/v1/credits/*` balance + ledger calls, and a speech-to-speech WebSocket via `POST /v1/sessions` (`mode: 's2s'`). Speko benchmarks every STT, LLM, and TTS provider per `(language, optimizeFor)` and routes each call to the best one in real time. Failover is handled server-side. You ship one integration; providers rotate without a code change.
+`@spekoai/sdk` is the server-side TypeScript SDK for the Speko voice gateway. It wraps three proxy endpoints — `/v1/transcribe`, `/v1/synthesize`, `/v1/complete` — a `/v1/usage` reporter, `/v1/credits/*` balance + ledger calls, a speech-to-speech WebSocket via `POST /v1/sessions` (`mode: 's2s'`), the outbound dialer at `POST /v1/sessions/phone` (`speko.voice.dial`), and CRUD for phone numbers, [agents](/sdk/agents), and per-agent [knowledge bases](/sdk/knowledge-bases). Speko benchmarks every STT, LLM, and TTS provider per `(language, optimizeFor)` and routes each call to the best one in real time. Failover is handled server-side. You ship one integration; providers rotate without a code change.
 
 ## Install
 
