@@ -89,6 +89,8 @@
               "sdk/synthesize",
               "sdk/complete",
               "sdk/realtime",
+              "sdk/agents",
+              "sdk/knowledge-bases",
               "sdk/usage",
               "sdk/credits",
               "sdk/types",

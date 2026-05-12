@@ -1,0 +1,243 @@
+---
+title: 'agents'
+description: 'Persisted agent definitions — system prompt, voice, intent, tools, and phone-number binding.'
+---
+
+An **agent** is a saved configuration for a voice pipeline: system prompt, TTS voice, routing intent, optional provider constraints, and an optional toolbelt. When an agent is bound to a phone number, inbound calls automatically hydrate the pipeline from the agent row instead of from per-call `dispatch_metadata_template` fields. For outbound, you can place a call using the agent's config directly.
+
+Every newly-created agent is auto-provisioned with a [knowledge base](/sdk/knowledge-bases) named `Default` — upload documents to it immediately without an extra setup step.
+
+```ts
+const agent = await speko.agents.create({
+  name: 'Support Bot',
+  systemPrompt: 'You are a helpful Acme support agent.',
+  voice: 'sophia',
+  intent: { language: 'en', optimizeFor: 'latency' },
+});
+
+await speko.agents.attachPhoneNumber(agent.id, number.id);
+```
+
+## Agent CRUD
+
+### `list(): Promise<AgentRow[]>`
+
+List every agent in the org.
+
+### `create(params: AgentCreateParams): Promise<AgentRow>`
+
+Create a new agent. The server auto-provisions a `Default` knowledge base in the same transaction.
+
+```ts
+const agent = await speko.agents.create({
+  name: 'Sales Voice',
+  systemPrompt: 'You are an outbound sales rep for Acme.',
+  voice: 'sophia',
+  intent: { language: 'en', optimizeFor: 'latency' },
+  llmOptions: { temperature: 0.6, maxTokens: 512 },
+  stackPreferences: {
+    allowedProviders: {
+      stt: ['deepgram'],
+      tts: ['elevenlabs', 'cartesia'],
+    },
+  },
+});
+```
+
+| Field              | Type                       | Description                                                                                         |
+| ------------------ | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `name`             | `string`                   | Required. 1–120 chars. Must be unique within the org.                                               |
+| `systemPrompt`     | `string`                   | Required. Used as the LLM system message during calls.                                              |
+| `voice`            | `string?`                  | TTS voice id (e.g. `sophia`). Optional but required at call time for outbound dialing.              |
+| `intent`           | `AgentIntent`              | Required. `{ language, optimizeFor? }` where `optimizeFor` is `'latency' \| 'quality' \| 'cost'`.    |
+| `llmOptions`       | `AgentLlmOptions?`         | `{ temperature?, maxTokens?, model? }` — per-call body wins on overlap.                              |
+| `stackPreferences` | `AgentStackPreferences?`   | Allow-list constraints per modality (`stt`, `llm`, `tts`, `s2s`).                                    |
+| `sttOptions`       | `AgentSttOptions?`         | `{ keywords? }` — vocabulary biasing forwarded to whichever STT provider the router picks.           |
+
+<Note>
+  `AgentIntent.optimizeFor` is narrower than the top-level `RoutingIntent.optimizeFor` (`'balanced' | 'accuracy' | 'latency' | 'cost'`). Agents specifically accept `'latency'`, `'quality'`, or `'cost'`.
+</Note>
+
+### `get(agentId: string): Promise<AgentRow>`
+
+Fetch one agent by id.
+
+### `update(agentId, params): Promise<AgentRow>`
+
+Patch any subset of the create fields. Server validates uniqueness on `name`.
+
+```ts
+await speko.agents.update(agent.id, {
+  systemPrompt: 'Updated prompt with new persona.',
+  voice: 'orion',
+});
+```
+
+### `delete(agentId: string): Promise<{ deleted: boolean }>`
+
+Drop the agent. **Cascades** to every knowledge base it owns (Chroma collection + GCS objects + DB rows). **Blocked** when:
+
+- The agent is named `Default` (the org's seed agent — `400`).
+- Any phone number is still linked to this agent (`409` with code `AGENT_HAS_PHONE_NUMBERS`). Unlink first via `detachPhoneNumber` or `phoneNumbers.update(id, { agentId: null })`.
+
+## Phone-number binding
+
+### `attachPhoneNumber(agentId: string, phoneNumberId: string): Promise<PhoneNumberRow>`
+
+Bind a phone number to this agent. Internally calls `PATCH /v1/phone-numbers/:id` with `{ agentId }`. The 1:1 binding means inbound calls to that number will hydrate the pipeline config from the agent row instead of from the number's `dispatchMetadataTemplate`.
+
+```ts
+await speko.agents.attachPhoneNumber(agent.id, number.id);
+```
+
+### `detachPhoneNumber(phoneNumberId: string): Promise<PhoneNumberRow>`
+
+Unlink the phone number from any agent. Inbound calls fall back to the number's `dispatchMetadataTemplate` (or fail if neither is configured).
+
+## Tools sub-resource
+
+`speko.agents.tools` exposes CRUD over per-agent tool definitions. Tools let the LLM call out to your code mid-call (`inline`), to a webhook endpoint Speko signs (`webhook`), or to a managed built-in (`builtin`).
+
+### `tools.list(agentId): Promise<AgentToolRow[]>`
+
+List every tool attached to this agent.
+
+### `tools.create(agentId, params): Promise<AgentToolRow>`
+
+Define a new tool. The plaintext webhook `secret` is encrypted server-side via the secrets store; the returned row carries a `secretRef` pointer instead.
+
+```ts
+await speko.agents.tools.create(agent.id, {
+  name: 'lookup_order',
+  description: 'Look up order status by id.',
+  parameters: {
+    type: 'object',
+    properties: { orderId: { type: 'string' } },
+    required: ['orderId'],
+  },
+  source: {
+    kind: 'webhook',
+    url: 'https://api.acme.com/voice/lookup-order',
+    secret: process.env.ACME_WEBHOOK_SECRET!,
+    timeoutMs: 2_000,
+  },
+});
+```
+
+| Field         | Type                          | Description                                                                                  |
+| ------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `name`        | `string`                      | 1–64 chars; must be a valid identifier (`[a-zA-Z_][a-zA-Z0-9_]*`).                            |
+| `description` | `string`                      | 1–1,024 chars; shown to the LLM.                                                              |
+| `parameters`  | `Record<string, unknown>`     | JSON Schema (draft-7) for the tool's arguments.                                               |
+| `source`      | `AgentToolSourceCreate`       | One of `{ kind: 'inline' }`, `{ kind: 'webhook', url, secret, headers?, timeoutMs? }`, or `{ kind: 'builtin', name, config? }`. |
+
+### `tools.get(agentId, toolId): Promise<AgentToolRow>`
+
+Fetch one tool. The webhook variant's response carries `secretRef`, never the plaintext.
+
+### `tools.update(agentId, toolId, params): Promise<AgentToolRow>`
+
+Patch description / parameters / source. On webhook updates, omitting `secret` keeps the existing one.
+
+### `tools.delete(agentId, toolId): Promise<{ deleted: boolean }>`
+
+Drop the tool.
+
+## Types
+
+`AgentRow`
+
+```ts
+interface AgentRow {
+  id: string;
+  organizationId: string;
+  name: string;
+  systemPrompt: string;
+  voice: string | null;
+  intent: { language: string; optimizeFor?: 'latency' | 'quality' | 'cost' };
+  llmOptions: { temperature?: number; maxTokens?: number; model?: string } | null;
+  stackPreferences: {
+    allowedProviders?: {
+      stt?: string[];
+      llm?: string[];
+      tts?: string[];
+      s2s?: string[];
+    };
+  } | null;
+  sttOptions: { keywords?: string[] } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+`AgentToolRow`
+
+```ts
+interface AgentToolRow {
+  id: string;
+  agentId: string;
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  source:
+    | { kind: 'inline' }
+    | { kind: 'webhook'; url: string; secretRef: string; headers?: Record<string, string>; timeoutMs?: number }
+    | { kind: 'builtin'; name: string; config?: unknown };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+All agent types are exported from the package root:
+
+```ts
+import type {
+  AgentIntent,
+  AgentLlmOptions,
+  AgentStackPreferences,
+  AgentSttOptions,
+  AgentRow,
+  AgentCreateParams,
+  AgentUpdateParams,
+  AgentToolRow,
+  AgentToolCreateParams,
+  AgentToolUpdateParams,
+  AgentToolSourceInline,
+  AgentToolSourceWebhookCreate,
+  AgentToolSourceWebhookSerialized,
+  AgentToolSourceBuiltin,
+  AgentToolSourceCreate,
+  AgentToolSourceSerialized,
+} from '@spekoai/sdk';
+```
+
+## End-to-end example
+
+Create an agent, attach a phone number, and place an outbound call using the agent's persona.
+
+```ts
+import { Speko } from '@spekoai/sdk';
+
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY });
+
+const number = await speko.phoneNumbers.create({
+  e164: '+12015551234',
+  direction: 'both',
+});
+
+const agent = await speko.agents.create({
+  name: 'Outbound Sales',
+  systemPrompt: 'You are an outbound sales rep for Acme.',
+  voice: 'sophia',
+  intent: { language: 'en', optimizeFor: 'latency' },
+});
+
+await speko.agents.attachPhoneNumber(agent.id, number.id);
+
+await speko.voice.dial({
+  to: '+12015559999',
+  intent: agent.intent,
+  voice: agent.voice ?? 'sophia',
+  systemPrompt: agent.systemPrompt,
+});
+```

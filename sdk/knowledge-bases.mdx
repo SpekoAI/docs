@@ -1,0 +1,228 @@
+---
+title: 'knowledgeBases'
+description: 'Per-agent retrieval — create knowledge bases and upload documents for in-call RAG.'
+---
+
+Each agent owns one or more **knowledge bases** (KBs). A KB holds documents that get chunked, embedded into a Chroma collection, and searched in real time during a call via the LLM's `search_knowledge_base` built-in tool. The agent's pipeline retrieves the most relevant chunks and folds them into the model's context — no RAG plumbing on your side.
+
+Every agent is auto-provisioned with a KB named `Default` at create time, so the simplest integration is: create an agent, list its KBs, find `Default`, upload your docs. Need more granular separation (FAQ vs pricing vs legal)? Create additional named KBs explicitly.
+
+```ts
+const [defaultKb] = await speko.knowledgeBases.list({ agentId: agent.id });
+
+const doc = await speko.knowledgeBases.uploadDocument(defaultKb.id, {
+  filename: 'faq.md',
+  contentType: 'text/markdown',
+  data: await Bun.file('./data/faq.md').arrayBuffer(),
+});
+
+await speko.knowledgeBases.pollDocumentReady(defaultKb.id, doc.id);
+```
+
+<Info>
+  Accepted content types today: `text/plain`, `text/markdown`, `text/x-markdown`, `application/x-markdown`. PDF parsing is on the roadmap. Individual document size is capped at 50 MiB.
+</Info>
+
+## Knowledge base CRUD
+
+### `create(params: KnowledgeBaseCreateParams): Promise<KnowledgeBaseRow>`
+
+Create a new KB owned by a specific agent.
+
+```ts
+const kb = await speko.knowledgeBases.create({
+  agentId: agent.id,
+  name: 'Product FAQ',
+  description: 'Customer-facing product questions',
+});
+```
+
+| Field         | Type      | Description                                                                |
+| ------------- | --------- | -------------------------------------------------------------------------- |
+| `agentId`     | `string`  | **Required.** The KB belongs to exactly one agent; cascade-deletes with it. |
+| `name`        | `string`  | **Required.** 1–120 chars.                                                  |
+| `description` | `string?` | Up to 2,000 chars.                                                          |
+
+### `list(params?: KnowledgeBaseListParams): Promise<KnowledgeBaseRow[]>`
+
+List KBs for the org. Optionally scoped to a single agent.
+
+```ts
+const allKbs = await speko.knowledgeBases.list();
+const agentKbs = await speko.knowledgeBases.list({ agentId: agent.id });
+```
+
+### `get(kbId: string): Promise<KnowledgeBaseRow>`
+
+Fetch one KB by id. Returns `KnowledgeBaseRow` or throws `SpekoApiError` on 404.
+
+### `delete(kbId: string): Promise<{ deleted: boolean }>`
+
+Drop the KB, its Chroma collection, and every GCS object backing its documents.
+
+## Documents
+
+### `listDocuments(kbId: string): Promise<KnowledgeBaseDocumentRow[]>`
+
+List documents in a KB. Each row carries `status: 'pending' | 'processing' | 'ready' | 'failed'` plus chunk count and any ingest `errorMessage`.
+
+### `getDocument(kbId: string, docId: string): Promise<KnowledgeBaseDocumentRow>`
+
+Fetch one document. Useful when you want to poll yourself instead of using {@link pollDocumentReady}.
+
+### `createDocument(kbId, params): Promise<KnowledgeBaseDocumentCreateResult>`
+
+Register a new document and receive a signed GCS PUT URL valid for **600 seconds**. You're expected to upload the bytes and then call {@link finalizeDocument}.
+
+```ts
+const { document, upload } = await speko.knowledgeBases.createDocument(kb.id, {
+  filename: 'faq.md',
+  contentType: 'text/markdown',
+  sizeBytes: bytes.byteLength,
+});
+
+await fetch(upload.url, {
+  method: upload.method,
+  headers: upload.headers,
+  body: bytes,
+});
+
+await speko.knowledgeBases.finalizeDocument(kb.id, document.id);
+```
+
+| Field         | Type                          | Description                                                              |
+| ------------- | ----------------------------- | ------------------------------------------------------------------------ |
+| `filename`    | `string`                      | Up to 512 chars.                                                         |
+| `contentType` | `string`                      | MIME type. See accepted types above.                                     |
+| `sizeBytes`   | `number`                      | Exact byte count; the signed URL enforces `0..sizeBytes` via header.     |
+| `metadata`    | `Record<string, unknown>?`    | Free-form metadata stored alongside the doc.                             |
+
+Returns `{ document, upload: { url, method: 'PUT', headers, expiresInSeconds } }`. The `headers` MUST be sent on the PUT — they include `Content-Type` and the GCS length-range header.
+
+### `finalizeDocument(kbId: string, docId: string): Promise<KnowledgeBaseDocumentRow>`
+
+Flip the document status to `processing` and enqueue ingest. The async pipeline downloads the bytes from GCS, chunks the text, embeds each chunk with `text-embedding-3-small`, and writes vectors to the KB's Chroma collection. Status flips to `ready` (or `failed` with an `errorMessage`) when done.
+
+### `deleteDocument(kbId: string, docId: string): Promise<{ deleted: boolean }>`
+
+Drop the row, its Chroma chunks, and the GCS object.
+
+## Convenience wrappers
+
+### `uploadDocument(kbId, params): Promise<KnowledgeBaseDocumentRow>`
+
+Collapses the three-step dance — create-doc → signed PUT → finalize — into a single call. Computes `sizeBytes` from `data` automatically. Returns the document with status `processing`. The signed-URL expiry never matters because the wrapper PUTs immediately after the mint.
+
+```ts
+const doc = await speko.knowledgeBases.uploadDocument(kb.id, {
+  filename: 'faq.md',
+  contentType: 'text/markdown',
+  data: await Bun.file('./data/faq.md').arrayBuffer(),
+});
+```
+
+| Field         | Type                                     | Description                                       |
+| ------------- | ---------------------------------------- | ------------------------------------------------- |
+| `filename`    | `string`                                 | Same as `createDocument`.                         |
+| `contentType` | `string`                                 | Same as `createDocument`.                         |
+| `data`        | `ArrayBuffer \| Uint8Array \| Blob`      | The bytes to upload.                              |
+| `metadata`    | `Record<string, unknown>?`               | Optional free-form metadata.                      |
+
+### `pollDocumentReady(kbId, docId, opts?): Promise<KnowledgeBaseDocumentRow>`
+
+Poll `getDocument` until `status === 'ready'` (resolve) or `'failed'` (throw `SpekoApiError` carrying the server's `errorMessage`) or the timeout elapses.
+
+```ts
+const ready = await speko.knowledgeBases.pollDocumentReady(kb.id, doc.id, {
+  intervalMs: 1_500,
+  timeoutMs: 60_000,
+});
+```
+
+| Field        | Type      | Default      | Description                           |
+| ------------ | --------- | ------------ | ------------------------------------- |
+| `intervalMs` | `number?` | `2000`       | How often to poll.                    |
+| `timeoutMs`  | `number?` | `120_000`    | Total wait before throwing 408.       |
+
+## Types
+
+`KnowledgeBaseRow`
+
+```ts
+interface KnowledgeBaseRow {
+  id: string;
+  organizationId: string;
+  agentId: string;
+  name: string;
+  description: string | null;
+  embeddingModel: string;        // 'text-embedding-3-small' today
+  documentCount: number;
+  chunkCount: number;
+  createdAt: string;             // ISO 8601
+  updatedAt: string;
+}
+```
+
+`KnowledgeBaseDocumentRow`
+
+```ts
+interface KnowledgeBaseDocumentRow {
+  id: string;
+  knowledgeBaseId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  status: 'pending' | 'processing' | 'ready' | 'failed';
+  errorMessage: string | null;
+  chunkCount: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  ingestedAt: string | null;
+}
+```
+
+All KB types are exported from the package root:
+
+```ts
+import type {
+  KnowledgeBaseRow,
+  KnowledgeBaseCreateParams,
+  KnowledgeBaseListParams,
+  KnowledgeBaseDocumentRow,
+  KnowledgeBaseDocumentStatus,
+  KnowledgeBaseDocumentCreateParams,
+  KnowledgeBaseDocumentCreateResult,
+  KnowledgeBaseDocumentUploadSpec,
+  KnowledgeBaseDocumentUploadParams,
+  KnowledgeBaseDocumentPollOptions,
+} from '@spekoai/sdk';
+```
+
+## End-to-end example
+
+Upload an FAQ to the auto-provisioned Default KB and wait for ingest:
+
+```ts
+import { Speko } from '@spekoai/sdk';
+
+const speko = new Speko({ apiKey: process.env.SPEKO_API_KEY });
+
+const agent = await speko.agents.create({
+  name: 'FAQ Bot',
+  systemPrompt: 'You are a helpful Acme support agent.',
+  voice: 'sophia',
+  intent: { language: 'en', optimizeFor: 'latency' },
+});
+
+const [defaultKb] = await speko.knowledgeBases.list({ agentId: agent.id });
+
+const doc = await speko.knowledgeBases.uploadDocument(defaultKb.id, {
+  filename: 'faq.md',
+  contentType: 'text/markdown',
+  data: await Bun.file('./data/faq.md').arrayBuffer(),
+});
+
+const ready = await speko.knowledgeBases.pollDocumentReady(defaultKb.id, doc.id);
+console.log(`Ingested ${ready.chunkCount} chunks — ready for retrieval.`);
+```
